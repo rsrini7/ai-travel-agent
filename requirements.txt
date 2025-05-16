@@ -1,0 +1,8 @@
+streamlit
+supabase
+# openai  <- Remove this or comment out
+# langchain-openai <- Remove this or comment out
+langchain
+langchain-google-genai # <- Add this
+langgraph
+python-dotenv
