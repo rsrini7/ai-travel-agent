@@ -56,6 +56,7 @@ with tab2:
 
     if not enquiries_list:
         st.info("No enquiries found. Please submit one in the 'New Enquiry' tab.")
+        st.session_state.selected_enquiry_id = None
     else:
         enquiry_options = {f"{e['id'][:8]}... - {e['destination']} ({e['created_at'][:10]})": e['id'] for e in enquiries_list}
         

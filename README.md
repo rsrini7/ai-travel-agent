@@ -215,7 +215,7 @@ This project is open-source and available under the [MIT License](LICENSE.txt) (
 1.  **Create `LICENSE.txt`:** If you choose the MIT license (common for open-source), create a file named `LICENSE.txt` in your project root and paste the MIT License text into it. You can easily find the MIT License text online.
 2.  **Review and Customize:** Read through the generated `README.md`.
     *   Fill in the `[Link to your Streamlit Cloud deployment if you have one]` if applicable.
-    *   Ensure the "Database Schema" section is accurate or clearly refers to where the SQL can be found. If you have the SQL `CREATE TABLE` statements handy from our previous discussion, you could paste them directly into a collapsible section within the README.
+    *   The complete database schema with table definitions and RLS policies can be found in `schema.sql`. This file contains all `CREATE TABLE` statements and security configurations needed for the application.
     *   Adjust any details that might have changed or that you want to emphasize.
 3.  **Commit and Push:**
     ```bash

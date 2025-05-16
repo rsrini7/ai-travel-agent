@@ -55,34 +55,35 @@ COMMENT ON COLUMN public.quotations.enquiry_id IS 'Foreign key linking to the pa
 COMMENT ON COLUMN public.quotations.itinerary_used_id IS 'Foreign key to the specific itinerary version used for this quote.';
 COMMENT ON COLUMN public.quotations.vendor_reply_used_id IS 'Foreign key to the specific vendor reply version used for this quote.';
 
--- Example for the 'enquiries' table. Repeat for others.
-
--- Allow all operations for authenticated users (if you plan to use Supabase Auth)
--- CREATE POLICY "Allow all access for authenticated users"
--- ON public.enquiries
--- FOR ALL
--- TO authenticated
--- USING (true)
--- WITH CHECK (true);
-
--- OR: Allow all operations for anon users (public access, use with caution)
-ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY; -- Ensure RLS is enabled first
-
+-- Enable RLS and create policies for all tables
+ALTER TABLE public.itineraries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public anon access"
-ON public.enquiries
-FOR ALL -- Or specify SELECT, INSERT, UPDATE, DELETE
-TO anon -- anon role is for public access with the anon key
+ON public.itineraries
+FOR ALL
+TO anon
 USING (true)
 WITH CHECK (true);
 
-CREATE POLICY "Allow anon read access"
-ON public.enquiries -- Replace with your table name
-FOR SELECT
+ALTER TABLE public.vendor_replies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public anon access"
+ON public.vendor_replies
+FOR ALL
 TO anon
-USING (true);
+USING (true)
+WITH CHECK (true);
 
-CREATE POLICY "Allow anon insert access"
-ON public.enquiries -- Replace with your table name
-FOR INSERT
+ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public anon access"
+ON public.quotations
+FOR ALL
 TO anon
+USING (true)
+WITH CHECK (true);
+
+ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY; 
+CREATE POLICY "Public anon access"
+ON public.enquiries
+FOR ALL
+TO anon
+USING (true)
 WITH CHECK (true);
