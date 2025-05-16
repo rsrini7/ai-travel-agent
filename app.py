@@ -1,4 +1,15 @@
 # app.py
+import os # Add os import if not already there
+from dotenv import load_dotenv # Add dotenv import
+
+# --- ADD THIS AT THE VERY TOP ---
+# Explicitly load .env here before any other project imports that might need environment variables
+# This ensures it's loaded as early as possible.
+if load_dotenv():
+    print("APP.PY: .env file loaded successfully by app.py's initial load_dotenv().")
+else:
+    print("APP.PY: .env file not found by app.py's initial load_dotenv().")
+    
 import streamlit as st
 from supabase_utils import (
     add_enquiry, get_enquiries, get_enquiry_by_id,
