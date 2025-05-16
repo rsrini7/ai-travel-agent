@@ -48,7 +48,7 @@ class QuotationState(TypedDict):
     enquiry_details: dict
     itinerary_text: str
     vendor_reply_text: str
-    parsed_vendor_info: Annotated[dict, operator.add]
+    parsed_vendor_info: dict # Remove Annotated and operator.add
     final_quotation: str
 
 def fetch_data_node(state: QuotationState):

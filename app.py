@@ -2,13 +2,7 @@
 import os # Add os import if not already there
 from dotenv import load_dotenv # Add dotenv import
 
-# --- ADD THIS AT THE VERY TOP ---
-# Explicitly load .env here before any other project imports that might need environment variables
-# This ensures it's loaded as early as possible.
-if load_dotenv():
-    print("APP.PY: .env file loaded successfully by app.py's initial load_dotenv().")
-else:
-    print("APP.PY: .env file not found by app.py's initial load_dotenv().")
+load_dotenv()
     
 import streamlit as st
 from supabase_utils import (
@@ -165,16 +159,16 @@ with tab2:
                                 new_quotation, error_msg_quote_add = add_quotation( # CHANGED
                                     enquiry_id, 
                                     quotation_text,
-                                    itinerary_id=itinerary_data['id'] if itinerary_data else None, # Use potentially updated itinerary_data
+                                    itinerary_id=itinerary_data['id'] if itinerary_data else None, 
                                     vendor_reply_id=vendor_reply_data['id'] if vendor_reply_data else None
                                 )
                                 if new_quotation:
                                     st.session_state.current_quotation = quotation_text
-                                    st.success("Quotation generated and saved successfully!")
+                                    st.success("Quotation generated and saved successfully!") # <--- THIS
                                 else:
                                     st.error(f"Failed to save quotation: {error_msg_quote_add if error_msg_quote_add else 'Unknown error'}") # CHANGED
                             else:
-                                st.error(quotation_text)
+                                st.error(quotation_text) # This handles errors from run_quotation_generation_graph directly
                 
                 if st.session_state.current_quotation:
                     with st.expander("View Generated Quotation", expanded=True):
