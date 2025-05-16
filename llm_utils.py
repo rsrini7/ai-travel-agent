@@ -8,44 +8,32 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, Annotated, List
 import operator
 
-# Call load_dotenv() here to ensure it's attempted when this module loads,
-# but the main robust call will be in app.py's start.
-load_dotenv() 
-
-# No longer initialize llm globally here
-# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-# if not GOOGLE_API_KEY:
-#     raise ValueError("GOOGLE_API_KEY not found in environment variables. Check .env file and ensure it's loaded.")
-# llm = ChatGoogleGenerativeAI(...)
+load_dotenv()
 
 def get_llm_instance():
     """Creates and returns an LLM instance, ensuring API key is loaded."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        # Attempt to load .env again just in case, though app.py should handle it.
         print("LLM_UTILS: GOOGLE_API_KEY not found, attempting to load .env again.")
-        load_dotenv(override=True) # Override if vars were loaded as None initially
+        load_dotenv(override=True)
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment variables even after trying to reload. Check .env file.")
     
-    # print(f"LLM_UTILS: Initializing LLM with key: {api_key[:5]}...") # For debugging
     return ChatGoogleGenerativeAI(
         model="gemini-1.5-flash-latest",
-        google_api_key=api_key,
-        convert_system_message_to_human=True
+        google_api_key=api_key
+        # convert_system_message_to_human=True # <- REMOVE THIS LINE or set to False and test
     )
 
 def generate_itinerary_llm(enquiry_details: dict) -> str:
-    """
-    Generates a basic itinerary using Langchain with Gemini.
-    enquiry_details: dict like {'destination': 'Paris', 'num_days': 3, 'traveler_count': 2, 'trip_type': 'Leisure'}
-    """
     try:
-        llm = get_llm_instance() # Get instance here
+        llm = get_llm_instance()
+        # MODIFIED PROMPT: System message content moved into the human message
         prompt_template = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful travel assistant. Generate a concise day-by-day itinerary."),
-            ("human", "Generate a {num_days}-day itinerary for {traveler_count} traveler(s) visiting {destination} for a {trip_type} trip. Focus on major attractions and suggest a balanced pace. Provide output as a simple text, day by day.")
+            ("human", """You are a helpful travel assistant. Generate a concise day-by-day itinerary.
+
+Generate a {num_days}-day itinerary for {traveler_count} traveler(s) visiting {destination} for a {trip_type} trip. Focus on major attractions and suggest a balanced pace. Provide output as a simple text, day by day.""")
         ])
         output_parser = StrOutputParser()
         chain = prompt_template | llm | output_parser
@@ -56,13 +44,11 @@ def generate_itinerary_llm(enquiry_details: dict) -> str:
         print(f"Error generating itinerary with LLM (Gemini): {e}")
         return f"Error: Could not generate itinerary. Detail: {e}"
 
-# --- LangGraph for Quotation Generation ---
-
 class QuotationState(TypedDict):
     enquiry_details: dict
     itinerary_text: str
     vendor_reply_text: str
-    parsed_vendor_info: Annotated[dict, operator.add] # operator.add is fine if you intend to merge results later
+    parsed_vendor_info: Annotated[dict, operator.add]
     final_quotation: str
 
 def fetch_data_node(state: QuotationState):
@@ -78,16 +64,19 @@ def parse_vendor_reply_node(state: QuotationState):
     vendor_reply = state["vendor_reply_text"]
     
     try:
-        llm = get_llm_instance() # Get instance here
+        llm = get_llm_instance()
+        # MODIFIED PROMPT: System message content moved into the human message
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert at parsing vendor replies for travel quotations. Extract key information like total price, inclusions (list them), and exclusions (list them). If not found, state 'Not specified'. Output in a simple key: value format or a short summary."),
-            ("human", "Parse the following vendor reply and extract total price, inclusions, and exclusions:\n\n{vendor_reply}")
+            ("human", """You are an expert at parsing vendor replies for travel quotations. Extract key information like total price, inclusions (list them), and exclusions (list them). If not found, state 'Not specified'. Output in a simple key: value format or a short summary.
+
+Parse the following vendor reply and extract total price, inclusions, and exclusions:
+
+{vendor_reply}""")
         ])
         parser = StrOutputParser()
         chain = prompt | llm | parser
         
         parsed_info_str = chain.invoke({"vendor_reply": vendor_reply})
-        # Ensure parsed_vendor_info is always a dict, even if just with the summary
         return {"parsed_vendor_info": {"summary": parsed_info_str}}
     except Exception as e:
         print(f"Error parsing vendor reply with LLM (Gemini): {e}")
@@ -98,35 +87,33 @@ def combine_and_format_node(state: QuotationState):
     print("---COMBINING AND FORMATTING QUOTATION (GEMINI)---")
     enquiry = state["enquiry_details"]
     itinerary = state["itinerary_text"]
-    # Ensure parsed_vendor_info is a dict and safely access summary
     parsed_vendor_info_dict = state.get("parsed_vendor_info", {})
     vendor_summary = parsed_vendor_info_dict.get("summary", "Vendor details not available.")
 
-
     try:
-        llm = get_llm_instance() # Get instance here
+        llm = get_llm_instance()
+        # MODIFIED PROMPT: System message content moved into the human message
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a travel agent creating a client quotation. Combine the itinerary and vendor information into a professional, clean, and structured quotation. Start with a greeting, include trip details, the day-wise itinerary, vendor pricing/inclusions, and a closing remark."),
-            ("human", """
-            Create a quotation based on the following:
-            Enquiry Details:
-            - Destination: {destination}
-            - Number of Days: {num_days}
-            - Traveler Count: {traveler_count}
-            - Trip Type: {trip_type}
+            ("human", """You are a travel agent creating a client quotation. Combine the itinerary and vendor information into a professional, clean, and structured quotation. Start with a greeting, include trip details, the day-wise itinerary, vendor pricing/inclusions, and a closing remark.
 
-            Proposed Itinerary:
-            ---
-            {itinerary}
-            ---
+Create a quotation based on the following:
+Enquiry Details:
+- Destination: {destination}
+- Number of Days: {num_days}
+- Traveler Count: {traveler_count}
+- Trip Type: {trip_type}
 
-            Vendor Information (Pricing, Inclusions/Exclusions):
-            ---
-            {vendor_info}
-            ---
-            
-            Format it clearly.
-            """)
+Proposed Itinerary:
+---
+{itinerary}
+---
+
+Vendor Information (Pricing, Inclusions/Exclusions):
+---
+{vendor_info}
+---
+
+Format it clearly.""")
         ])
         parser = StrOutputParser()
         chain = prompt | llm | parser
@@ -137,7 +124,7 @@ def combine_and_format_node(state: QuotationState):
             "traveler_count": enquiry.get("traveler_count", "N/A"),
             "trip_type": enquiry.get("trip_type", "N/A"),
             "itinerary": itinerary,
-            "vendor_info": vendor_summary # Use the safely accessed summary
+            "vendor_info": vendor_summary
         })
         return {"final_quotation": final_quotation_text}
     except Exception as e:
@@ -163,11 +150,10 @@ def run_quotation_generation_graph(enquiry_details: dict, itinerary_text: str, v
         "enquiry_details": enquiry_details,
         "itinerary_text": itinerary_text,
         "vendor_reply_text": vendor_reply_text,
-        "parsed_vendor_info": {}, # Initialize as empty dict
+        "parsed_vendor_info": {},
         "final_quotation": ""
     }
     try:
-        # Note: The LLM instances within the graph nodes will be created when those nodes run.
         final_state = quotation_generation_graph.invoke(initial_state)
         return final_state.get("final_quotation", "Error: Quotation not generated (Gemini).")
     except Exception as e:
