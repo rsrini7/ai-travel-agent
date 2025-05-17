@@ -65,8 +65,13 @@ Provide the output as a comma-separated list or a bulleted list of suggestions."
         response = chain.invoke(enquiry_details)
         return response
     except Exception as e:
-        print(f"Error generating place suggestions with LLM ({provider}): {e}")
-        return f"Error: Could not generate place suggestions using {provider}. Detail: {e}"
+        error_msg = f"Error generating place suggestions with LLM ({provider}): {e}"
+        print(error_msg)
+        if provider == "OpenRouter" and hasattr(e, 'response') and hasattr(e.response, 'json'):
+            error_data = e.response.json()
+            if 'error' in error_data and 'message' in error_data['error']:
+                return f"OpenRouter Model Error: {error_data['error']['message']}"
+        return f"Error: Could not generate place suggestions using {provider}. Detail: {str(e)}"
 
 # --- PDF Generation Helper Class ---
 class PDFQuotation(FPDF):
