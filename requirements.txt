@@ -6,3 +6,5 @@ langchain-community
 langgraph
 python-dotenv
 langchain-openai
+fpdf2
+pandas
