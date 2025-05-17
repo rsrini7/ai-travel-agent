@@ -452,6 +452,10 @@ You are a travel agent assistant preparing data for a PDF quotation document.
 Your goal is to transform the Client Enquiry Details and the Parsed Vendor Information into a single, structured JSON object.
 Strictly adhere to the JSON format and all specified keys. Ensure all string values are properly escaped for JSON.
 
+**Information Sources:**
+1.  **Client Enquiry Details:** Basic trip requirements.
+2.  **Parsed Vendor Information:** This is output from a previous step where a vendor's textual reply was processed. It *should* contain specific details like proposed itinerary, hotel details, pricing, meals included, room configuration, inclusions, and exclusions provided by the vendor.
+
 **Crucial Task: Detailed Itinerary Generation**
 - You MUST generate a comprehensive, engaging, day-wise itinerary for the full duration of `{num_days}` days.
 - Source information primarily from the "Proposed Itinerary" section of the "Parsed Vendor Information."
@@ -465,13 +469,20 @@ Strictly adhere to the JSON format and all specified keys. Ensure all string val
         - You MUST expand upon it logically to cover all `{num_days}` days.
         - For any missing days, creatively and plausibly generate activities based on the destination (`{destination}`), trip type (`{trip_type}`), and common tourist interests for such a trip. Make it sound like a coherent and well-planned experience.
         - Ensure a smooth flow between days.
-- **If the vendor reply provides NO itinerary details at all:**
+- **If the vendor reply provides NO itinerary details at all (check "Proposed Itinerary" in Parsed Vendor Information):**
     - You MUST create a compelling, generic, day-wise itinerary for `{num_days}` days in `{destination}` suitable for a `{trip_type}` trip.
     - In the description of "Day 1" for such a generated itinerary, include a note like: "(Please note: This is a suggested itinerary based on popular activities. We can customize it further to your preferences.)"
 - **Beautification & Clarity:**
     - Use clear, professional, and engaging language throughout the itinerary descriptions.
     - Avoid jargon. Highlight key experiences.
     - Ensure correct grammar and spelling.
+
+**Populating JSON Fields from Parsed Vendor Information:**
+- **`meal_plan_summary`**: Extract this from the "Meals Included" section of the `Parsed Vendor Information`. If not specified there, use a sensible default like "Daily breakfast at hotel; other meals as per detailed itinerary".
+- **`room_configuration_summary`**: Extract this from the "Rooms Required/Configuration" section of the `Parsed Vendor Information`. If not specified there, use "Standard double occupancy rooms (or as per final booking confirmation)".
+- **`cost_per_head`, `total_package_cost`, `currency`**: Extract these from the "Total Price or Per Person Price" and "Currency" sections of `Parsed Vendor Information`. If not found, use defaults like "To be advised" or "INR".
+- **`inclusions`, `exclusions`**: Primarily use the "Inclusions" and "Exclusions" lists from `Parsed Vendor Information`. If these are minimal or missing, you can augment them with the standard items provided in the JSON template below, but vendor-provided specifics take precedence.
+- **`hotel_details`**: Use information from "Hotel Details" in `Parsed Vendor Information`. If none, use the template's default.
 
 Client Enquiry Details:
 - Destination: {destination}
@@ -480,12 +491,12 @@ Client Enquiry Details:
 - Trip Type: {trip_type}
 - Client Name (if available, use "Mr./Ms. [Client Name]", else "Mr./Ms. Valued Client"): {client_name_placeholder}
 
-Parsed Vendor Information (This contains what the vendor provided, including their proposed itinerary if any):
+Parsed Vendor Information (This contains what the vendor provided, including their proposed itinerary, meals, room configuration, pricing, etc.):
 ---
 {vendor_parsed_text}
 ---
 
-**Output JSON Structure (fill all keys, use "Not specified", default values, or empty lists [] if info is unavailable and cannot be plausibly generated for non-itinerary fields):**
+**Output JSON Structure (fill all keys, using information as per instructions above. Use "Not specified", default values, or empty lists [] if info is unavailable and cannot be plausibly generated/derived for non-itinerary fields):**
 ```json
 {{
   "client_name": "{client_name_placeholder}",
@@ -493,7 +504,8 @@ Parsed Vendor Information (This contains what the vendor provided, including the
   "destination_summary": "{destination}",
   "duration_summary": "{num_days} Days / {num_nights} Nights of Adventure & Discovery",
   "dates_summary": "Flexible Travel Dates (To be finalized)",
-  "meal_plan_summary": "As per detailed itinerary (typically daily breakfast, other meals may be specified)",
+  "meal_plan_summary": "Daily breakfast at hotel; other meals as per detailed itinerary",
+  "room_configuration_summary": "Standard double occupancy rooms (or as per final booking confirmation)",
   "vehicle_summary": "Comfortable Private AC Vehicle for all transfers and sightseeing as per itinerary",
   "main_image_placeholder_text": "A Glimpse of {destination}'s Charm",
   
@@ -517,8 +529,8 @@ Parsed Vendor Information (This contains what the vendor provided, including the
   "currency": "INR", 
 
   "inclusions": [
-      "Accommodation in well-appointed rooms at specified category hotels.",
-      "Daily breakfast at the hotel (unless specified otherwise).",
+      "Accommodation as per room configuration summary in specified category hotels.",
+      "Meals as per the meal plan summary.",
       "All transfers, sightseeing, and inter-city travel by a private air-conditioned vehicle.",
       "Driver's allowance, fuel charges, parking fees, and toll taxes.",
       "All applicable hotel and transport taxes."
@@ -526,7 +538,7 @@ Parsed Vendor Information (This contains what the vendor provided, including the
   "exclusions": [
       "International or domestic airfare/train fare unless specified.",
       "Visa charges, travel insurance.",
-      "Any meals other than those mentioned in the itinerary (e.g., lunch, dinner).",
+      "Any meals other than those mentioned in the 'Meals Included' or itinerary.",
       "Entrance fees to monuments, museums, parks, and attractions.",
       "Personal expenses such as laundry, telephone calls, tips, porterage, etc.",
       "Any services not explicitly mentioned in the 'Inclusions' section."
