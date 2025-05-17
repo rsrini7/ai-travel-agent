@@ -155,7 +155,7 @@ class PDFQuotation(FPDF):
         else:
             self.ln(10) 
             print(f"Warning: {banner_path} not found.")
-        self.ln(45) 
+        self.ln(60) 
 
         self.set_font("DejaVu", "B", 10)
         self.set_text_color(*self.text_color_dark)
@@ -344,6 +344,12 @@ class PDFQuotation(FPDF):
         self.multi_cell(0,5, f"{self.ICON_LINK} Know more about them at: {data.get('company_website', 'www.tripexplore.in')}", new_x="LMARGIN", new_y="NEXT", link=data.get('company_website', ''))
         self.ln(5)
 
+        self.set_font("DejaVu", "B", 11)
+        self.multi_cell(0, 8, "TCS rules", new_x="LMARGIN", new_y="NEXT")
+        self.set_font("DejaVu", "", 8)
+        self.multi_cell(0, 4.5, data.get("tcs_rules_full", "TCS information not available."), new_x="LMARGIN", new_y="NEXT")
+        self.ln(10)
+
         logo_rating_path_footer = os.path.join("assets", "tripexplore-logo-with-rating.png")
         if os.path.exists(logo_rating_path_footer):
             img_w_footer = 70
@@ -356,12 +362,6 @@ class PDFQuotation(FPDF):
         else:
             self.ln(15)
             print(f"Warning: Footer logo {logo_rating_path_footer} not found.")
-
-        self.set_font("DejaVu", "B", 11)
-        self.multi_cell(0, 8, "TCS rules", new_x="LMARGIN", new_y="NEXT")
-        self.set_font("DejaVu", "", 8)
-        self.multi_cell(0, 4.5, data.get("tcs_rules_full", "TCS information not available."), new_x="LMARGIN", new_y="NEXT")
-        self.ln(5)
 
 # --- PDF Creation Function ---
 def create_pdf_quotation_bytes(data: Dict[str, Any]) -> bytes:
