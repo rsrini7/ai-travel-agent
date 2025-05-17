@@ -1,24 +1,28 @@
 import os
-import json # Added for handling JSON data
+import json
+import uuid # For unique filenames
+from datetime import datetime # For timestamp in filenames
 from dotenv import load_dotenv
 
 if load_dotenv():
-    print("APP.PY: .env file loaded successfully by app.py's initial load_dotenv().")
+    print("APP.PY: .env file loaded successfully.")
 else:
-    print("APP.PY: .env file not found by app.py's initial load_dotenv().")
+    print("APP.PY: .env file not found.")
 
 import streamlit as st
-# import pandas as pd # Pandas import remains, though direct usage in this file is minimal
 from supabase_utils import (
     add_enquiry, get_enquiries, get_enquiry_by_id,
     add_itinerary, get_itinerary_by_enquiry_id,
     add_vendor_reply, get_vendor_reply_by_enquiry_id,
-    add_quotation, # Ensure this is the updated version
-    add_client, # For adding client info
-    get_client_by_enquiry_id # For fetching client name for PDF
+    add_quotation, update_quotation_storage_path, # Added update function
+    add_client, get_client_by_enquiry_id,
+    upload_file_to_storage, get_public_url, create_signed_url # Storage functions
 )
 from llm_utils import generate_places_suggestion_llm, run_quotation_generation_graph
-from docx_utils import convert_pdf_bytes_to_docx_bytes # For DOCX conversion
+from docx_utils import convert_pdf_bytes_to_docx_bytes
+
+# --- CONFIGURATION ---
+QUOTATIONS_BUCKET_NAME = "quotations" # Make sure this matches your bucket name in Supabase
 
 st.set_page_config(layout="wide")
 st.title("🤖 AI-Powered Travel Automation MVP")
@@ -34,20 +38,32 @@ if 'selected_enquiry_id_tab3' not in st.session_state:
     st.session_state.selected_enquiry_id_tab3 = None
 if 'tab3_enquiry_details' not in st.session_state:
     st.session_state.tab3_enquiry_details = None
-if 'tab3_client_name' not in st.session_state: # For storing client name in Tab 3
+if 'tab3_client_name' not in st.session_state:
     st.session_state.tab3_client_name = "Valued Client"
 if 'tab3_itinerary_info' not in st.session_state:
     st.session_state.tab3_itinerary_info = None
 if 'tab3_vendor_reply_info' not in st.session_state:
     st.session_state.tab3_vendor_reply_info = None
-if 'tab3_quotation_pdf_bytes' not in st.session_state:
+
+# For managing the currently generated quotation in the DB
+if 'tab3_current_quotation_db_id' not in st.session_state:
+    st.session_state.tab3_current_quotation_db_id = None
+if 'tab3_current_pdf_storage_path' not in st.session_state:
+    st.session_state.tab3_current_pdf_storage_path = None
+if 'tab3_current_docx_storage_path' not in st.session_state:
+    st.session_state.tab3_current_docx_storage_path = None
+
+if 'tab3_quotation_pdf_bytes' not in st.session_state: # For holding bytes for download button
     st.session_state.tab3_quotation_pdf_bytes = None
-if 'tab3_quotation_docx_bytes' not in st.session_state: # Added for DOCX
+if 'tab3_quotation_docx_bytes' not in st.session_state: # For holding bytes for download button
     st.session_state.tab3_quotation_docx_bytes = None
 if 'show_quotation_success_tab3' not in st.session_state:
-    st.session_state.show_quotation_success_tab3 = False # General success flag for generation
+    st.session_state.show_quotation_success_tab3 = False
 if 'selected_ai_provider' not in st.session_state:
-    st.session_state.selected_ai_provider = "OpenRouter" # Default or load from config
+    st.session_state.selected_ai_provider = "OpenRouter"
+
+if 'vendor_reply_saved_success_message' not in st.session_state:
+    st.session_state.vendor_reply_saved_success_message = None # Or False
 
 tab1, tab2, tab3 = st.tabs([
     "📝 New Enquiry",
@@ -57,6 +73,7 @@ tab1, tab2, tab3 = st.tabs([
 
 # --- AI Provider Selection (Global Sidebar) ---
 st.sidebar.subheader("⚙️ AI Configuration")
+# ... (sidebar code remains the same)
 ai_provider_options = ["Gemini", "OpenRouter"]
 current_provider_index = ai_provider_options.index(st.session_state.selected_ai_provider) if st.session_state.selected_ai_provider in ai_provider_options else 0
 selected_provider = st.sidebar.selectbox(
@@ -74,8 +91,9 @@ if st.session_state.selected_ai_provider == "OpenRouter":
     st.sidebar.caption(f"OpenRouter Model: {openrouter_model}")
 
 
-with tab1:
+with tab1: # New Enquiry
     st.header("1. Submit New Enquiry")
+    # ... (Tab 1 code remains largely the same)
     with st.form("new_enquiry_form"):
         st.subheader("Travel Details")
         destination = st.text_input("Destination", placeholder="e.g., Paris, France")
@@ -109,25 +127,29 @@ with tab1:
 
                         if client_data:
                             st.success(f"Enquiry and client information submitted successfully! ID: {enquiry_data['id']}")
-                            # Reset relevant session states
                             st.session_state.selected_enquiry_id = enquiry_data['id']
                             st.session_state.current_ai_suggestions = None
                             st.session_state.current_ai_suggestions_id = None
-                            st.session_state.selected_enquiry_id_tab3 = enquiry_data['id']
-                            st.session_state.tab3_enquiry_details = None
-                            st.session_state.tab3_client_name = client_name_input # Store client name for tab 3
+                            st.session_state.selected_enquiry_id_tab3 = enquiry_data['id'] # Auto-select in Tab 3
+                            st.session_state.tab3_enquiry_details = None # Force reload in Tab 3
+                            st.session_state.tab3_client_name = client_name_input
                             st.session_state.tab3_itinerary_info = None
                             st.session_state.tab3_vendor_reply_info = None
                             st.session_state.tab3_quotation_pdf_bytes = None
-                            st.session_state.tab3_quotation_docx_bytes = None # Reset DOCX
+                            st.session_state.tab3_quotation_docx_bytes = None
+                            st.session_state.tab3_current_quotation_db_id = None # Reset
+                            st.session_state.tab3_current_pdf_storage_path = None
+                            st.session_state.tab3_current_docx_storage_path = None
                             st.session_state.show_quotation_success_tab3 = False
                         else:
                             st.error(f"Enquiry submitted (ID: {enquiry_data['id']}) but failed to save client information. {client_error if client_error else 'Unknown error'}")
                     else:
                         st.error(f"Failed to submit enquiry. {error_msg if error_msg else 'Unknown error'}")
 
-with tab2:
+
+with tab2: # Manage Enquiries & Itinerary
     st.header("2. Manage Enquiries & Generate Itinerary")
+    # ... (Tab 2 code remains the same as your previous full version)
     enquiries_list_tab2, error_msg_enq_list_tab2 = get_enquiries()
     if error_msg_enq_list_tab2:
         st.error(f"Could not load enquiries: {error_msg_enq_list_tab2}")
@@ -171,7 +193,7 @@ with tab2:
             enquiry_details_tab2, error_msg_details_tab2 = get_enquiry_by_id(enquiry_id_tab2)
 
             if enquiry_details_tab2:
-                if st.session_state.current_ai_suggestions is None or st.session_state.current_ai_suggestions_id is None:
+                if st.session_state.current_ai_suggestions is None or st.session_state.current_ai_suggestions_id is None: # or if enquiry_id changed
                     ai_suggestions_data_tab2, _ = get_itinerary_by_enquiry_id(enquiry_id_tab2)
                     if ai_suggestions_data_tab2:
                         st.session_state.current_ai_suggestions = ai_suggestions_data_tab2['itinerary_text']
@@ -206,7 +228,7 @@ with tab2:
                             enquiry_details_tab2,
                             provider=st.session_state.selected_ai_provider
                         )
-                        if "Error:" not in suggestions_text and "Critical error" not in suggestions_text: # Basic error check
+                        if "Error:" not in suggestions_text and "Critical error" not in suggestions_text:
                             new_suggestion_record, error_msg_sugg_add = add_itinerary(enquiry_id_tab2, suggestions_text)
                             if new_suggestion_record:
                                 st.session_state.current_ai_suggestions = suggestions_text
@@ -216,11 +238,10 @@ with tab2:
                             else:
                                 st.error(f"Failed to save AI suggestions: {error_msg_sugg_add or 'Unknown error'}")
                         else:
-                            st.error(suggestions_text) # Show LLM error if one occurred
+                            st.error(suggestions_text)
                 if st.session_state.get('show_ai_suggestion_success_tab2', False):
                     st.success("AI Place suggestions generated and saved successfully!")
                     st.session_state.show_ai_suggestion_success_tab2 = False
-
             elif error_msg_details_tab2:
                  st.error(f"Could not load selected enquiry details: {error_msg_details_tab2}")
             else:
@@ -229,8 +250,14 @@ with tab2:
             st.info("Select an enquiry to see details and generate itinerary.")
 
 
-with tab3:
+with tab3: # Add Vendor Reply & Generate Quotation
     st.header("3. Add Vendor Reply & Generate Quotation")
+    
+    # Display the one-time success message if set
+    if st.session_state.get('vendor_reply_saved_success_message'):
+        st.success(st.session_state.vendor_reply_saved_success_message)
+        st.session_state.vendor_reply_saved_success_message = None # Clear the message after displaying
+    
     enquiries_list_tab3, error_msg_enq_list_tab3 = get_enquiries()
     if error_msg_enq_list_tab3:
         st.error(f"Could not load enquiries for this tab: {error_msg_enq_list_tab3}")
@@ -265,58 +292,79 @@ with tab3:
             st.session_state.selected_enquiry_id_tab3 = enquiry_options_tab3[selected_enquiry_label_tab3]
 
         if st.session_state.selected_enquiry_id_tab3 != prev_selected_enquiry_id_tab3:
+            # Reset all tab3 specific states when enquiry changes
             st.session_state.tab3_enquiry_details = None
-            st.session_state.tab3_client_name = "Valued Client" # Reset client name
+            st.session_state.tab3_client_name = "Valued Client"
             st.session_state.tab3_itinerary_info = None
             st.session_state.tab3_vendor_reply_info = None
             st.session_state.tab3_quotation_pdf_bytes = None
-            st.session_state.tab3_quotation_docx_bytes = None # Reset DOCX
+            st.session_state.tab3_quotation_docx_bytes = None
+            st.session_state.tab3_current_quotation_db_id = None # Crucial reset
+            st.session_state.tab3_current_pdf_storage_path = None
+            st.session_state.tab3_current_docx_storage_path = None
             st.session_state.show_quotation_success_tab3 = False
             st.rerun()
 
         if st.session_state.selected_enquiry_id_tab3:
             active_enquiry_id_tab3 = st.session_state.selected_enquiry_id_tab3
 
-            # Load enquiry details if not already loaded
-            if st.session_state.tab3_enquiry_details is None:
+            # Load details if not already loaded for the current active_enquiry_id_tab3
+            force_reload_tab3_data = False
+            if st.session_state.tab3_enquiry_details is None or st.session_state.tab3_enquiry_details.get('id') != active_enquiry_id_tab3:
+                force_reload_tab3_data = True
+
+            # Additionally, you might introduce a flag that Tab2 sets to true after itinerary generation
+            # e.g., if st.session_state.get('itinerary_updated_by_tab2'):
+            # force_reload_tab3_data = True
+            # st.session_state.itinerary_updated_by_tab2 = False # Reset the flag
+
+            if force_reload_tab3_data:
+                # st.write(f"[DEBUG Tab3] Forcing reload of all data for enquiry: {active_enquiry_id_tab3}") # Optional Debug
+                # Load Enquiry Details
                 details, _ = get_enquiry_by_id(active_enquiry_id_tab3)
                 st.session_state.tab3_enquiry_details = details
-                # Fetch client details for this enquiry
+
+                # Load Client Name
                 client_data_for_tab3, _ = get_client_by_enquiry_id(active_enquiry_id_tab3)
-                if client_data_for_tab3 and client_data_for_tab3.get("name"):
-                    st.session_state.tab3_client_name = client_data_for_tab3["name"]
-                else:
-                    st.session_state.tab3_client_name = "Valued Client" # Default if not found
-
-            # Load itinerary if not already loaded or if it's stale
-            if st.session_state.tab3_itinerary_info is None or \
-               (st.session_state.tab3_itinerary_info.get('enquiry_id_loaded_for') != active_enquiry_id_tab3):
-                itinerary_data, _ = get_itinerary_by_enquiry_id(active_enquiry_id_tab3)
-                if itinerary_data:
-                    st.session_state.tab3_itinerary_info = {
-                        'text': itinerary_data['itinerary_text'],
-                        'id': itinerary_data['id'],
-                        'enquiry_id_loaded_for': active_enquiry_id_tab3
-                    }
-                else: # Fallback or clear if no itinerary for current enquiry
-                    st.session_state.tab3_itinerary_info = {'text': "No itinerary generated yet.", 'id': None, 'enquiry_id_loaded_for': active_enquiry_id_tab3}
-
-
-            # Load vendor reply if not already loaded or stale
-            if st.session_state.tab3_vendor_reply_info is None or \
-               (st.session_state.tab3_vendor_reply_info.get('enquiry_id_loaded_for') != active_enquiry_id_tab3):
+                st.session_state.tab3_client_name = client_data_for_tab3["name"] if client_data_for_tab3 and client_data_for_tab3.get("name") else "Valued Client"
+                
+                # Load Vendor Reply (this logic seems okay as it's specific to tab3's workflow)
                 vendor_reply_data, _ = get_vendor_reply_by_enquiry_id(active_enquiry_id_tab3)
-                if vendor_reply_data:
-                    st.session_state.tab3_vendor_reply_info = {
-                        'text': vendor_reply_data['reply_text'],
-                        'id': vendor_reply_data['id'],
-                        'enquiry_id_loaded_for': active_enquiry_id_tab3
-                    }
-                else:
-                    st.session_state.tab3_vendor_reply_info = {'text': None, 'id': None, 'enquiry_id_loaded_for': active_enquiry_id_tab3}
+                st.session_state.tab3_vendor_reply_info = {
+                    'text': vendor_reply_data['reply_text'] if vendor_reply_data else None,
+                    'id': vendor_reply_data['id'] if vendor_reply_data else None,
+                    'enquiry_id_loaded_for': active_enquiry_id_tab3
+                }
+                # Reset quotation related states as well if enquiry changed
+                st.session_state.tab3_quotation_pdf_bytes = None
+                st.session_state.tab3_quotation_docx_bytes = None
+                st.session_state.tab3_current_quotation_db_id = None
+                st.session_state.tab3_current_pdf_storage_path = None
+                st.session_state.tab3_current_docx_storage_path = None
+                st.session_state.show_quotation_success_tab3 = False
 
+
+            # ALWAYS Fetch Itinerary for Tab 3 when it's active for an enquiry,
+            # as it might have been updated by Tab 2.
+            # This overrides the previous conditional load for itinerary in Tab 3.
+            # st.write(f"[DEBUG Tab3] Fetching itinerary for {active_enquiry_id_tab3} every time Tab3 logic runs for it.") # Optional Debug
+            itinerary_data_tab3, _ = get_itinerary_by_enquiry_id(active_enquiry_id_tab3)
+            if itinerary_data_tab3:
+                st.session_state.tab3_itinerary_info = {
+                    'text': itinerary_data_tab3['itinerary_text'],
+                    'id': itinerary_data_tab3['id'],
+                    'enquiry_id_loaded_for': active_enquiry_id_tab3 # Still useful for internal checks if needed
+                }
+            else:
+                st.session_state.tab3_itinerary_info = {
+                    'text': "No itinerary found in database for this enquiry.", # More accurate message
+                    'id': None,
+                    'enquiry_id_loaded_for': active_enquiry_id_tab3
+                }
+                
             if st.session_state.tab3_enquiry_details:
                 st.subheader(f"Working with Enquiry for {st.session_state.tab3_client_name}: {st.session_state.tab3_enquiry_details['destination']} (ID: {active_enquiry_id_tab3[:8]}...)")
+                # ... (display enquiry details - same as before)
                 cols_details_tab3 = st.columns(2)
                 with cols_details_tab3[0]:
                     st.markdown(f"""
@@ -330,25 +378,31 @@ with tab3:
                         - **Status:** {st.session_state.tab3_enquiry_details.get('status', 'New')}
                     """)
 
-                if st.session_state.tab3_itinerary_info and st.session_state.tab3_itinerary_info.get('text') and st.session_state.tab3_itinerary_info['text'] != "No itinerary generated yet.":
-                    with st.expander("View AI Generated Itinerary/Suggestions", expanded=False):
-                        st.markdown(st.session_state.tab3_itinerary_info['text'])
+                if st.session_state.tab3_itinerary_info and \
+                    st.session_state.tab3_itinerary_info.get('text') and \
+                    st.session_state.tab3_itinerary_info['text'] not in ["No itinerary generated yet.", "No itinerary found in database for this enquiry."]:
+                        with st.expander("View AI Generated Itinerary/Suggestions", expanded=False):
+                            st.markdown(st.session_state.tab3_itinerary_info['text'])
                 else:
-                    st.caption("No AI itinerary/suggestions found for this enquiry (generate in Tab 2 or ensure one exists).")
+                    st.caption(st.session_state.tab3_itinerary_info.get('text', "No itinerary information available.")) # Display the text from the loaded info
 
                 st.markdown("---")
                 st.subheader("✍️ Add/View Vendor Reply")
-
                 current_vendor_reply_text = st.session_state.tab3_vendor_reply_info.get('text', "") if st.session_state.tab3_vendor_reply_info else ""
+                # ... (Vendor reply form - same as before, but ensure reset of quotation IDs on submit)
                 if current_vendor_reply_text:
                     with st.expander("View Current Vendor Reply", expanded=False):
                         st.text_area("Existing Vendor Reply", value=current_vendor_reply_text, height=150, disabled=True, key=f"disp_vendor_reply_tab3_{active_enquiry_id_tab3}")
-                    st.info("A vendor reply already exists. Submitting a new one will be used for new quotations.")
                 else:
                     st.caption("No vendor reply submitted yet for this enquiry.")
 
                 with st.form(key=f"vendor_reply_form_tab3_{active_enquiry_id_tab3}"):
-                    vendor_reply_text_input = st.text_area("Vendor Reply Text (Pricing, Inclusions, etc.)", height=200, key=f"new_vendor_reply_text_tab3_{active_enquiry_id_tab3}", value=current_vendor_reply_text)
+                    vendor_reply_text_input = st.text_area(
+                        "Vendor Reply Text (Pricing, Inclusions, etc.)",
+                        height=200,
+                        key=f"new_vendor_reply_text_tab3_{active_enquiry_id_tab3}",
+                        value=st.session_state.tab3_vendor_reply_info.get('text', "") if st.session_state.tab3_vendor_reply_info else ""
+                    )
                     submitted_vendor_reply = st.form_submit_button("Submit/Update Vendor Reply")
 
                     if submitted_vendor_reply:
@@ -358,155 +412,229 @@ with tab3:
                             with st.spinner("Saving vendor reply..."):
                                 reply_data, error_msg_reply_add = add_vendor_reply(active_enquiry_id_tab3, vendor_reply_text_input)
                                 if reply_data:
-                                    st.success(f"Vendor reply saved successfully for enquiry ID: {active_enquiry_id_tab3[:8]}...")
+                                    # Set the success message flag
+                                    st.session_state.vendor_reply_saved_success_message = f"Vendor reply saved successfully for enquiry ID: {active_enquiry_id_tab3[:8]}..."
+                                    
+                                    # Update session state with new data *before* rerun
                                     st.session_state.tab3_vendor_reply_info = {
                                         'text': reply_data['reply_text'],
                                         'id': reply_data['id'],
                                         'enquiry_id_loaded_for': active_enquiry_id_tab3
-                                        }
+                                    }
+                                    # Reset states that depend on vendor reply
                                     st.session_state.tab3_quotation_pdf_bytes = None
-                                    st.session_state.tab3_quotation_docx_bytes = None # Reset DOCX
-                                    st.session_state.show_quotation_success_tab3 = False
-                                    st.rerun()
+                                    st.session_state.tab3_quotation_docx_bytes = None
+                                    st.session_state.tab3_current_quotation_db_id = None
+                                    st.session_state.tab3_current_pdf_storage_path = None
+                                    st.session_state.tab3_current_docx_storage_path = None
+                                    st.session_state.show_quotation_success_tab3 = False     
+                                    st.rerun() # Rerun to reflect changes and show message at the top
                                 else:
                                     st.error(f"Failed to save vendor reply. {error_msg_reply_add or 'Unknown error'}")
-
+                
                 st.markdown("---")
                 st.subheader(f"📄 AI Quotation Generation (using {st.session_state.selected_ai_provider})")
 
                 vendor_reply_available = st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info.get('text')
-                itinerary_available = st.session_state.tab3_itinerary_info and st.session_state.tab3_itinerary_info.get('text') and st.session_state.tab3_itinerary_info['text'] != "No itinerary generated yet."
-
-                if not vendor_reply_available:
-                    st.warning("A vendor reply is required to generate quotations. Please add one above.")
-                if not itinerary_available:
-                    st.warning("An AI-generated itinerary/suggestion is preferred for quotation generation. Please generate one in Tab 2 if missing.")
+                # itinerary_available = st.session_state.tab3_itinerary_info and st.session_state.tab3_itinerary_info.get('text') and st.session_state.tab3_itinerary_info['text'] != "No itinerary generated yet."
+                
+                if not vendor_reply_available: st.warning("A vendor reply is required to generate quotations.")
+                # if not itinerary_available: st.warning("An AI-generated itinerary is preferred.")
 
                 generate_quotation_disabled = not (vendor_reply_available and st.session_state.tab3_enquiry_details)
 
                 col1_gen, col2_gen = st.columns(2)
+                # --- PDF GENERATION ---
                 with col1_gen:
                     if st.button(f"Generate Quotation PDF with {st.session_state.selected_ai_provider}",
-                                disabled=generate_quotation_disabled,
-                                key="generate_pdf_btn_tab3"):
-                        st.session_state.tab3_quotation_pdf_bytes = None
-                        st.session_state.show_quotation_success_tab3 = False
+                                disabled=generate_quotation_disabled, key="generate_pdf_btn_tab3"):
+                        st.session_state.tab3_quotation_pdf_bytes = None # Clear previous for download
+                        st.session_state.show_quotation_success_tab3 = False # Reset success message
+                        # st.session_state.tab3_current_quotation_db_id = None # Reset db id for new generation cycle
 
-                        with st.spinner(f"Generating quotation PDF with {st.session_state.selected_ai_provider}... This may take moments."):
-                            current_enquiry_details_for_generation = st.session_state.tab3_enquiry_details.copy()
-                            current_enquiry_details_for_generation["client_name_actual"] = st.session_state.tab3_client_name
-                            # Pass itinerary text to the graph if needed by prompts, or let graph fetch it
-                            current_enquiry_details_for_generation["itinerary_text_from_ui"] = st.session_state.tab3_itinerary_info.get('text', "Not available")
+                        with st.spinner(f"Generating PDF data with {st.session_state.selected_ai_provider}..."):
+                            current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
+                            current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
+                            current_enquiry_details_for_gen["itinerary_text_from_ui"] = st.session_state.tab3_itinerary_info.get('text', "Not available")
 
                             pdf_bytes_output, structured_data_dict = run_quotation_generation_graph(
-                                current_enquiry_details_for_generation,
+                                current_enquiry_details_for_gen,
                                 st.session_state.tab3_vendor_reply_info['text'],
                                 st.session_state.selected_ai_provider
                             )
-
+                        
                         if structured_data_dict and not structured_data_dict.get("error"):
                             is_error_pdf_content = b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output
-                            if pdf_bytes_output and not is_error_pdf_content and len(pdf_bytes_output) > 1000: # Heuristic
-                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
-                                st.session_state.show_quotation_success_tab3 = True
-                                st.success("Quotation PDF generated successfully!")
+                            if pdf_bytes_output and not is_error_pdf_content and len(pdf_bytes_output) > 1000:
+                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output # For download button
 
-                                # Save structured data to Supabase
-                                itinerary_id_to_save = st.session_state.tab3_itinerary_info.get('id')
-                                vendor_reply_id_to_save = st.session_state.tab3_vendor_reply_info.get('id')
-
-                                q_data, q_error = add_quotation(
-                                    enquiry_id=active_enquiry_id_tab3,
-                                    structured_data_json=structured_data_dict,
-                                    itinerary_used_id=itinerary_id_to_save,
-                                    vendor_reply_used_id=vendor_reply_id_to_save,
-                                    pdf_storage_path=None, # Placeholder
-                                    docx_storage_path=None # Placeholder
-                                )
-                                if q_error:
-                                    st.error(f"PDF generated, but failed to save quotation's structured data to DB: {q_error}")
+                                # Upload PDF to Supabase Storage
+                                with st.spinner("Uploading PDF to cloud storage..."):
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    file_name_in_storage = f"{active_enquiry_id_tab3}/quotation_{st.session_state.tab3_enquiry_details['destination'].replace(' ','_')}_{timestamp}_{uuid.uuid4().hex[:8]}.pdf"
+                                    pdf_storage_path, upload_err = upload_file_to_storage(
+                                        QUOTATIONS_BUCKET_NAME, file_name_in_storage, pdf_bytes_output, "application/pdf"
+                                    )
+                                
+                                if upload_err:
+                                    st.error(f"PDF generated, but failed to upload to storage: {upload_err}")
+                                    # Still allow download of local bytes
                                 else:
-                                    st.info("Quotation's structured data saved to database.")
-                            else:
-                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output # Show error PDF if generated
-                                st.error("Failed to generate a valid quotation PDF. An error PDF might be available for download.")
-                        else:
-                            err_msg = structured_data_dict.get('error', "Unknown error") if structured_data_dict else "Graph did not return structured data."
-                            raw_output = structured_data_dict.get('raw_output', '') if structured_data_dict else ''
-                            st.error(f"Failed to generate quotation due to error in data structuring: {err_msg}")
-                            if raw_output:
-                                st.expander("View Raw LLM Output from Structuring Node").text(raw_output)
-                            if pdf_bytes_output: # An error PDF might have been made by the graph
-                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
-                                st.warning("An error PDF based on faulty data might be available for download.")
+                                    st.info(f"PDF uploaded to storage: {pdf_storage_path}")
+                                    st.session_state.tab3_current_pdf_storage_path = pdf_storage_path
 
-                if st.session_state.tab3_quotation_pdf_bytes:
-                    st.download_button(
-                        label="Download Quotation PDF",
-                        data=st.session_state.tab3_quotation_pdf_bytes,
-                        file_name=f"Quotation_PDF_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.pdf",
-                        mime="application/pdf",
-                        key="download_pdf_btn"
-                    )
+                                # Save/Update quotation record in DB
+                                with st.spinner("Saving quotation data to database..."):
+                                    itinerary_id_to_save = st.session_state.tab3_itinerary_info.get('id')
+                                    vendor_reply_id_to_save = st.session_state.tab3_vendor_reply_info.get('id')
+                                    
+                                    # Create a new quotation record for this generation attempt
+                                    q_data, q_error = add_quotation(
+                                        enquiry_id=active_enquiry_id_tab3,
+                                        structured_data_json=structured_data_dict,
+                                        itinerary_used_id=itinerary_id_to_save,
+                                        vendor_reply_used_id=vendor_reply_id_to_save,
+                                        pdf_storage_path=st.session_state.tab3_current_pdf_storage_path, # Use uploaded path
+                                        docx_storage_path=st.session_state.tab3_current_docx_storage_path # Persist if already set
+                                    )
+                                    if q_error:
+                                        st.error(f"Failed to save quotation data to DB: {q_error}")
+                                    else:
+                                        st.session_state.tab3_current_quotation_db_id = q_data['id'] # Store new DB ID
+                                        st.success("Quotation PDF generated, uploaded, and data saved!")
+                                        st.session_state.show_quotation_success_tab3 = True
+                            else: # PDF bytes are bad or too small
+                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output # Show error PDF for download
+                                st.error("Failed to generate a valid quotation PDF. An error PDF might be available.")
+                        else: # Error in structured_data_dict
+                            err_msg = structured_data_dict.get('error', "Unknown") if structured_data_dict else "Graph error"
+                            raw_out = structured_data_dict.get('raw_output', '') if structured_data_dict else ''
+                            st.error(f"Failed to structure data for PDF: {err_msg}")
+                            if raw_out: st.expander("Raw LLM Output").text(raw_out)
+                            if pdf_bytes_output: st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
 
+
+                # --- DOCX GENERATION ---
                 with col2_gen:
                     if st.button(f"Generate Quotation DOCX with {st.session_state.selected_ai_provider}",
-                                disabled=generate_quotation_disabled,
-                                key="generate_docx_btn_tab3"):
-                        st.session_state.tab3_quotation_docx_bytes = None # Clear previous
-                        # show_quotation_success_tab3 is primarily for PDF, DOCX just generates
-                        
-                        with st.spinner(f"Generating quotation DOCX with {st.session_state.selected_ai_provider}... This may take moments."):
-                            current_enquiry_details_for_generation = st.session_state.tab3_enquiry_details.copy()
-                            current_enquiry_details_for_generation["client_name_actual"] = st.session_state.tab3_client_name
-                            current_enquiry_details_for_generation["itinerary_text_from_ui"] = st.session_state.tab3_itinerary_info.get('text', "Not available")
+                                disabled=generate_quotation_disabled, key="generate_docx_btn_tab3"):
+                        st.session_state.tab3_quotation_docx_bytes = None # Clear previous for download
 
-                            pdf_bytes_for_docx, structured_data_dict_for_docx = run_quotation_generation_graph(
-                                current_enquiry_details_for_generation,
+                        with st.spinner(f"Generating DOCX data with {st.session_state.selected_ai_provider}..."):
+                            current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
+                            current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
+                            current_enquiry_details_for_gen["itinerary_text_from_ui"] = st.session_state.tab3_itinerary_info.get('text', "Not available")
+
+                            # This re-runs graph; could be optimized if structured_data_dict from PDF gen is stored and reused
+                            pdf_bytes_for_docx, structured_data_dict_docx = run_quotation_generation_graph(
+                                current_enquiry_details_for_gen,
                                 st.session_state.tab3_vendor_reply_info['text'],
                                 st.session_state.selected_ai_provider
                             )
-                        
-                        # The structured data would have been saved (or attempted) by the PDF generation flow if it ran.
-                        # Here we focus on generating the DOCX for download.
-                        if structured_data_dict_for_docx and not structured_data_dict_for_docx.get("error"):
+
+                        if structured_data_dict_docx and not structured_data_dict_docx.get("error"):
                             is_error_pdf_content_for_docx = b"Error generating PDF" in pdf_bytes_for_docx or b"Quotation Generation Failed" in pdf_bytes_for_docx
                             if pdf_bytes_for_docx and not is_error_pdf_content_for_docx and len(pdf_bytes_for_docx) > 1000:
                                 with st.spinner("Converting PDF to DOCX..."):
                                     docx_bytes_output = convert_pdf_bytes_to_docx_bytes(pdf_bytes_for_docx)
+                                
                                 if docx_bytes_output:
-                                    st.session_state.tab3_quotation_docx_bytes = docx_bytes_output
-                                    st.success("Quotation DOCX generated successfully!")
-                                else:
+                                    st.session_state.tab3_quotation_docx_bytes = docx_bytes_output # For download
+
+                                    # Upload DOCX to Supabase Storage
+                                    with st.spinner("Uploading DOCX to cloud storage..."):
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        file_name_in_storage_docx = f"{active_enquiry_id_tab3}/quotation_{st.session_state.tab3_enquiry_details['destination'].replace(' ','_')}_{timestamp}_{uuid.uuid4().hex[:8]}.docx"
+                                        docx_storage_path, upload_err_docx = upload_file_to_storage(
+                                            QUOTATIONS_BUCKET_NAME, file_name_in_storage_docx, docx_bytes_output, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        )
+
+                                    if upload_err_docx:
+                                        st.error(f"DOCX generated, but failed to upload to storage: {upload_err_docx}")
+                                    else:
+                                        st.info(f"DOCX uploaded to storage: {docx_storage_path}")
+                                        st.session_state.tab3_current_docx_storage_path = docx_storage_path
+                                    
+                                    # Update existing or add new quotation record
+                                    with st.spinner("Saving/updating quotation data for DOCX..."):
+                                        if st.session_state.tab3_current_quotation_db_id: # DB record from PDF gen exists
+                                            _, update_err = update_quotation_storage_path(st.session_state.tab3_current_quotation_db_id, 'docx_storage_path', st.session_state.tab3_current_docx_storage_path)
+                                            if update_err: st.error(f"Failed to update DOCX path in DB: {update_err}")
+                                            else: st.success("Quotation DOCX generated, uploaded, and DB record updated!")
+                                        else: # No prior PDF generation in this session, create new record
+                                            itinerary_id_to_save = st.session_state.tab3_itinerary_info.get('id')
+                                            vendor_reply_id_to_save = st.session_state.tab3_vendor_reply_info.get('id')
+                                            q_data_docx, q_error_docx = add_quotation(
+                                                enquiry_id=active_enquiry_id_tab3,
+                                                structured_data_json=structured_data_dict_docx, # Use data from this DOCX flow
+                                                itinerary_used_id=itinerary_id_to_save,
+                                                vendor_reply_used_id=vendor_reply_id_to_save,
+                                                pdf_storage_path=st.session_state.tab3_current_pdf_storage_path, # Persist if set
+                                                docx_storage_path=st.session_state.tab3_current_docx_storage_path
+                                            )
+                                            if q_error_docx: st.error(f"Failed to save DOCX quotation data to DB: {q_error_docx}")
+                                            else:
+                                                st.session_state.tab3_current_quotation_db_id = q_data_docx['id']
+                                                st.success("Quotation DOCX generated, uploaded, and new data record saved!")
+                                else: # docx_bytes_output is None
                                     st.error("Failed to convert PDF to DOCX.")
-                            else:
-                                st.error("Could not generate underlying PDF for DOCX conversion. An error PDF might have been generated by the LLM process.")
-                                if pdf_bytes_for_docx: # Make error PDF available if created
-                                    st.download_button(
-                                        label="Download Intermediate Error PDF (for DOCX)",
-                                        data=pdf_bytes_for_docx,
-                                        file_name=f"Error_PDF_for_DOCX_{active_enquiry_id_tab3[:6]}.pdf",
-                                        mime="application/pdf",
-                                        key="download_error_pdf_for_docx_btn"
-                                    )
+                            else: # pdf_bytes_for_docx bad
+                                st.error("Could not generate underlying PDF for DOCX conversion.")
+                                if pdf_bytes_for_docx: st.download_button("Download Intermediate Error PDF", pdf_bytes_for_docx, "Error_PDF_for_DOCX.pdf", "application/pdf")
+                        else: # Error in structured_data_dict_docx
+                            err_msg_docx = structured_data_dict_docx.get('error', "Unknown") if structured_data_dict_docx else "Graph error"
+                            raw_out_docx = structured_data_dict_docx.get('raw_output', '') if structured_data_dict_docx else ''
+                            st.error(f"Failed to structure data for DOCX: {err_msg_docx}")
+                            if raw_out_docx: st.expander("Raw LLM Output (DOCX attempt)").text(raw_out_docx)
+                
+                # --- DOWNLOAD BUTTONS ---
+                # Placed outside the generation button columns, but still within tab3 active enquiry scope
+                st.markdown("---")
+                st.subheader("Download Generated Files")
+                
+                dl_col1, dl_col2 = st.columns(2)
+                with dl_col1:
+                    if st.session_state.tab3_quotation_pdf_bytes:
+                        st.download_button(
+                            label="Download Generated PDF",
+                            data=st.session_state.tab3_quotation_pdf_bytes,
+                            file_name=f"Quotation_PDF_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.pdf",
+                            mime="application/pdf", key="final_download_pdf_btn"
+                        )
+                    # Display link to stored PDF if available
+                    if st.session_state.tab3_current_pdf_storage_path:
+                        pdf_public_url = get_public_url(QUOTATIONS_BUCKET_NAME, st.session_state.tab3_current_pdf_storage_path)
+                        if pdf_public_url:
+                            st.markdown(f"[View Stored PDF]({pdf_public_url}) (if bucket is public)", unsafe_allow_html=True)
+                        else: # Try signed URL if public URL fails or bucket is private
+                            signed_url_pdf, err_signed_pdf = create_signed_url(QUOTATIONS_BUCKET_NAME, st.session_state.tab3_current_pdf_storage_path)
+                            if signed_url_pdf:
+                                st.markdown(f"[Download Stored PDF (Signed URL)]({signed_url_pdf})", unsafe_allow_html=True)
+                            elif err_signed_pdf:
+                                st.caption(f"Could not get URL for stored PDF: {err_signed_pdf}")
+
+
+                with dl_col2:
+                    if st.session_state.tab3_quotation_docx_bytes:
+                        st.download_button(
+                            label="Download Generated DOCX",
+                            data=st.session_state.tab3_quotation_docx_bytes,
+                            file_name=f"Quotation_DOCX_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="final_download_docx_btn"
+                        )
+                    # Display link to stored DOCX if available
+                    if st.session_state.tab3_current_docx_storage_path:
+                        docx_public_url = get_public_url(QUOTATIONS_BUCKET_NAME, st.session_state.tab3_current_docx_storage_path)
+                        if docx_public_url:
+                            st.markdown(f"[View Stored DOCX]({docx_public_url}) (if bucket is public)", unsafe_allow_html=True)
                         else:
-                            err_msg_docx = structured_data_dict_for_docx.get('error', "Unknown error") if structured_data_dict_for_docx else "Graph did not return structured data for DOCX."
-                            raw_output_docx = structured_data_dict_for_docx.get('raw_output', '') if structured_data_dict_for_docx else ''
-                            st.error(f"Failed to generate data for DOCX: {err_msg_docx}")
-                            if raw_output_docx:
-                                st.expander("View Raw LLM Output from Structuring Node (DOCX attempt)").text(raw_output_docx)
+                            signed_url_docx, err_signed_docx = create_signed_url(QUOTATIONS_BUCKET_NAME, st.session_state.tab3_current_docx_storage_path)
+                            if signed_url_docx:
+                                st.markdown(f"[Download Stored DOCX (Signed URL)]({signed_url_docx})", unsafe_allow_html=True)
+                            elif err_signed_docx:
+                                st.caption(f"Could not get URL for stored DOCX: {err_signed_docx}")
 
-
-                if st.session_state.tab3_quotation_docx_bytes:
-                    st.download_button(
-                        label="Download Quotation DOCX",
-                        data=st.session_state.tab3_quotation_docx_bytes,
-                        file_name=f"Quotation_DOCX_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", # Correct MIME for .docx
-                        key="download_docx_btn"
-                    )
-
-            else:
+            else: # if not st.session_state.tab3_enquiry_details
                  st.error(f"Could not load details for the selected enquiry (ID: {active_enquiry_id_tab3[:8]}...).")
-        else:
+        else: # if not st.session_state.selected_enquiry_id_tab3
             st.info("Select an enquiry to manage its vendor reply and quotation.")
