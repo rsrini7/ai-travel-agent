@@ -49,12 +49,24 @@ This MVP demonstrates the core workflow using Python, Streamlit for the UI, Lang
 
 ```
 ai-travel-agent/
-├── app.py                   # Main Streamlit application
-├── supabase_utils.py        # Functions for Supabase interaction
-├── llm_utils.py             # Functions for Langchain/LangGraph LLM interactions
-├── requirements.txt         # Python dependencies
-├── .env.example             # Example for environment variables
-└── README.md                # This file
+├── app.py                   # Main Streamlit application handling UI, form inputs, and workflow orchestration
+├── supabase_utils.py        # Handles all Supabase database interactions including CRUD operations for enquiries, itineraries, vendor replies, and quotations
+├── llm_utils.py             # Manages LLM interactions including itinerary generation and quotation processing using Langchain/LangGraph
+├── docx_utils.py            # Provides PDF to DOCX conversion functionality for vendor document processing
+├── pdf_utils.py             # Generates professional PDF quotations with custom fonts and formatting
+├── requirements.txt         # Python dependencies including Streamlit, Supabase, Langchain, and document processing libraries
+├── schema.sql               # Database schema definitions for Supabase tables (enquiries, itineraries, vendor_replies, quotations)
+├── schema-drop.sql          # Database schema cleanup scripts
+├── storage.sql              # Supabase storage bucket configurations
+├── assets/                  # Static assets
+│   ├── fonts/               # Custom fonts (DejaVu Sans) used in PDF generation
+│   │   ├── DejaVuSansCondensed-Bold.ttf
+│   │   ├── DejaVuSansCondensed-Oblique.ttf
+│   │   └── DejaVuSansCondensed.ttf
+│   ├── top_banner.png       # UI banner image for the Streamlit app
+│   └── tripexplore-logo-with-rating.png # Company logo used in PDF quotations
+├── .env.example             # Example environment variables file for Supabase and Google API configurations
+└── README.md                # Project documentation
 ```
 
 ## Setup and Installation
@@ -188,6 +200,8 @@ The following tables are used in Supabase:
 *   **Error Handling & Logging:** More comprehensive error management and logging.
 *   **Testing:** Unit and integration tests.
 *   **Deployment:** Streamlined deployment to cloud platforms (e.g., Streamlit Cloud, AWS, Google Cloud).
+*   **Document Processing:** Added support for DOCX and PDF file formats.
+*   **Database Management:** Includes complete schema definitions and cleanup scripts.
 
 ## Contributing
 
