@@ -1,241 +1,224 @@
 ```markdown
-# AI-Powered End-to-End Travel Automation System (MVP)
+# AI-Powered Travel Automation MVP
 
-This project is a Minimum Viable Product (MVP) for an AI-powered system designed to automate various aspects of travel business operations, focusing on enquiry intake, itinerary research, and quotation generation.
+## 🚀 Overview
 
-**Live Demo:** [Link to your Streamlit Cloud deployment if you have one]
-**GitHub Repository:** [https://github.com/rsrini7/ai-travel-agent](https://github.com/rsrini7/ai-travel-agent)
+This project is a Minimum Viable Product (MVP) demonstrating an AI-powered travel automation system. It allows users to manage travel enquiries, generate itinerary suggestions, input vendor replies, and automatically create professional-looking quotations in PDF and DOCX formats. The system leverages Large Language Models (LLMs) for content generation and Supabase for backend data storage and file management.
 
-## Overview
+## ✨ Features
 
-The system aims to streamline the process for travel agents by:
-1.  Accepting customer travel enquiries.
-2.  Utilizing AI (Large Language Models) to research and generate draft itineraries.
-3.  Processing vendor replies (e.g., pricing, inclusions).
-4.  Generating formatted quotations for customers by combining itinerary and vendor information with AI assistance.
+*   **Enquiry Management:**
+    *   Submit new travel enquiries with details like destination, duration, number of travelers, trip type, and client information.
+*   **AI Itinerary Suggestions:**
+    *   Generate AI-powered suggestions for places and attractions based on enquiry details.
+    *   Selectable AI providers (Google Gemini, OpenRouter).
+*   **Vendor Reply Integration:**
+    *   Input and store vendor replies, including pricing, inclusions, and exclusions.
+*   **AI Quotation Generation:**
+    *   Automatically generate structured quotation data using LLMs based on enquiry, itinerary, and vendor reply.
+    *   Produce downloadable PDF quotations with a professional layout.
+    *   Convert generated PDFs to DOCX format.
+*   **Cloud Storage:**
+    *   Store generated quotation documents (PDF, DOCX) in Supabase Storage.
+*   **Data Persistence:**
+    *   All enquiries, client details, itineraries, vendor replies, and quotation metadata are stored in a Supabase PostgreSQL database.
+*   **Configurable AI:**
+    *   Choose between different AI providers (Gemini, OpenRouter) for content generation tasks.
+    *   Specify a default model for OpenRouter via environment variables.
 
-This MVP demonstrates the core workflow using Python, Streamlit for the UI, Langchain & LangGraph for AI orchestration, and Supabase as the backend database.
+## 🛠️ Tech Stack
 
-## Features (MVP)
-
-*   **Enquiry Intake:**
-    *   Web form to capture customer travel details (destination, dates, travelers, trip type).
-    *   Enquiries are stored in a Supabase database.
-*   **AI Itinerary Generation:**
-    *   Generate a day-wise itinerary based on enquiry details using a Large Language Model (currently configured for Google Gemini 1.5 Flash).
-    *   Generated itineraries are stored and linked to the original enquiry.
-*   **Vendor Reply Intake:**
-    *   Interface to input plain text vendor replies (containing pricing, inclusions/exclusions).
-    *   Vendor replies are stored and linked to the relevant enquiry.
-*   **AI-Powered Quotation Generation:**
-    *   Combines the AI-generated itinerary and parsed vendor reply information using LangGraph and an LLM.
-    *   Outputs a structured quotation draft.
-    *   Quotations are stored and linked to the enquiry.
-*   **Basic Management UI:**
-    *   View lists of enquiries.
-    *   Select an enquiry to view its details, generated itinerary, vendor reply, and quotation.
-    *   Trigger generation steps for selected enquiries.
-
-## Technology Stack
-
-*   **Backend:** Python
-*   **Frontend/UI:** Streamlit
-*   **AI Orchestration:** Langchain, LangGraph
-*   **Large Language Model (LLM):** Google Gemini 1.5 Flash (configurable)
-*   **Database:** Supabase (PostgreSQL)
+*   **Frontend:** Streamlit
+*   **Backend & Database:** Supabase (PostgreSQL, Storage)
+*   **AI/LLM Integration:**
+    *   Langchain
+    *   LangGraph (for orchestrating quotation generation steps)
+    *   LLM Providers: Google Gemini, OpenRouter
+*   **Document Generation:**
+    *   FPDF2 (`fpdf`) for PDF creation
+    *   `pdf2docx` for PDF to DOCX conversion
 *   **Environment Management:** `python-dotenv`
+*   **Programming Language:** Python 3.11
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-ai-travel-agent/
-├── app.py                   # Main Streamlit application handling UI, form inputs, and workflow orchestration
-├── supabase_utils.py        # Handles all Supabase database interactions including CRUD operations for enquiries, itineraries, vendor replies, and quotations
-├── llm_utils.py             # Manages LLM interactions including itinerary generation and quotation processing using Langchain/LangGraph
-├── docx_utils.py            # Provides PDF to DOCX conversion functionality for vendor document processing
-├── pdf_utils.py             # Generates professional PDF quotations with custom fonts and formatting
-├── requirements.txt         # Python dependencies including Streamlit, Supabase, Langchain, and document processing libraries
-├── schema.sql               # Database schema definitions for Supabase tables (enquiries, itineraries, vendor_replies, quotations)
-├── schema-drop.sql          # Database schema cleanup scripts
-├── storage.sql              # Supabase storage bucket configurations
-├── assets/                  # Static assets
-│   ├── fonts/               # Custom fonts (DejaVu Sans) used in PDF generation
+.
+├── app.py                          # Main Streamlit application
+├── llm_utils.py                    # LLM interaction, LangGraph workflows
+├── supabase_utils.py               # Supabase database and storage utilities
+├── pdf_utils.py                    # PDF generation logic using FPDF2
+├── docx_utils.py                   # PDF to DOCX conversion utility
+├── schema.sql                      # Supabase database schema (tables)
+├── schema-drop.sql                 # Script to drop database tables (for dev/reset)
+├── storage.sql                     # Supabase Storage bucket policies
+├── requirements.txt                # Python dependencies
+├── .python-version                 # Specifies Python version (3.11)
+├── .env.example                    # Environment variable template
+├── assets/                         # Static assets for PDF generation
+│   ├── fonts/
+│   │   ├── DejaVuSansCondensed.ttf
 │   │   ├── DejaVuSansCondensed-Bold.ttf
-│   │   ├── DejaVuSansCondensed-Oblique.ttf
-│   │   └── DejaVuSansCondensed.ttf
-│   ├── top_banner.png       # UI banner image for the Streamlit app
-│   └── tripexplore-logo-with-rating.png # Company logo used in PDF quotations
-├── .env.example             # Example environment variables file for Supabase and Google API configurations
-└── README.md                # Project documentation
+│   │   └── DejaVuSansCondensed-Oblique.ttf
+│   ├── top_banner.png              # (User needs to provide)
+│   └── tripexplore-logo-with-rating.png # (User needs to provide)
+└── Readme.md                       # This file
 ```
 
-## Setup and Installation
+## ⚙️ Setup and Installation
 
 ### Prerequisites
 
-*   Python 3.10+
-*   Supabase Account: [https://supabase.com/](https://supabase.com/)
-*   Google Cloud Project with Generative Language API (Gemini API) enabled.
-    *   Obtain a Google API Key from [Google AI Studio](https://aistudio.google.com/app/apikey) or your Google Cloud Console.
+*   Python 3.11
+*   A Supabase account (for database and storage)
+*   API Keys:
+    *   Google API Key (if using Gemini)
+    *   OpenRouter API Key (if using OpenRouter)
 
-### 1. Clone the Repository
+### Steps
 
-```bash
-git clone https://github.com/rsrini7/ai-travel-agent.git
-cd ai-travel-agent
-```
-
-### 2. Set up Supabase
-
-1.  Create a new project in Supabase.
-2.  **Enable `uuid-ossp` Extension:**
-    *   In your Supabase project dashboard, go to `Database` -> `Extensions`.
-    *   Search for `uuid-ossp` and enable it.
-3.  **Create Tables:**
-    *   Go to `SQL Editor` in your Supabase dashboard.
-    *   Run the SQL commands provided in the [Database Schema](#database-schema) section below (or use the SQL provided earlier in project discussions if available separately).
-4.  **Configure Row Level Security (RLS):**
-    *   For MVP/development, you can temporarily disable RLS for the created tables or create permissive policies.
-    *   Example (run in SQL Editor for each table, e.g., `public.enquiries`):
-        ```sql
-        ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY;
-        CREATE POLICY "Public anon access"
-        ON public.enquiries
-        FOR ALL
-        TO anon
-        USING (true)
-        WITH CHECK (true);
-        ```
-        Repeat for `itineraries`, `vendor_replies`, and `quotations` tables.
-        **Caution:** For production, implement stricter RLS policies.
-
-### 3. Set up Environment Variables
-
-1.  Create a `.env` file in the root of the project directory:
+1.  **Clone the Repository:**
     ```bash
-    cp .env.example .env
+    git clone <repository-url>
+    cd <repository-directory>
     ```
-2.  Edit the `.env` file with your credentials:
+
+2.  **Create a Virtual Environment and Activate it:**
+    ```bash
+    python -m venv venv
+    # On Windows
+    venv\Scripts\activate
+    # On macOS/Linux
+    source venv/bin/activate
     ```
-    SUPABASE_URL="YOUR_SUPABASE_URL"
-    SUPABASE_KEY="YOUR_SUPABASE_ANON_KEY" # Or your service_role key if needed for specific policies
-    GOOGLE_API_KEY="YOUR_GOOGLE_API_KEY"
+
+3.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
     ```
-    *   Find `SUPABASE_URL` and `SUPABASE_KEY` (anon key) in your Supabase project settings under `API`.
 
-### 4. Create a Virtual Environment and Install Dependencies
+4.  **Set up Environment Variables:**
+    *   Copy `.env.example` to a new file named `.env`:
+        ```bash
+        cp .env.example .env
+        ```
+    *   Edit `.env` and fill in your actual credentials:
+        ```env
+        SUPABASE_URL="YOUR_SUPABASE_URL"
+        SUPABASE_KEY="YOUR_SUPABASE_ANON_KEY" # Or service_role key if needed for specific policies
+        GOOGLE_API_KEY="YOUR_GOOGLE_API_KEY"
+        OPENROUTER_API_KEY="YOUR_OPENROUTER_API_KEY"
+        OPENROUTER_DEFAULT_MODEL="google/gemini-flash-1.5" # Example, can be overridden
+        OPENROUTER_HTTP_REFERER="http://localhost:3000" # Optional, set your app's URL
+        OPENROUTER_APP_TITLE="AI Travel Quotation" # Optional, set your app's title
+        ```
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+5.  **Supabase Setup:**
+    *   Go to your Supabase project dashboard.
+    *   **Database:**
+        *   Navigate to the "SQL Editor".
+        *   Click "+ New query" and run the contents of `schema.sql` to create the necessary tables.
+        *   (For development/reset, you can use `schema-drop.sql` to remove tables.)
+    *   **Storage:**
+        *   Navigate to "Storage".
+        *   Click "Create a new bucket".
+        *   Name the bucket `quotations`. Make it a public bucket if you want direct public URLs, or keep it private and rely on signed URLs (the app handles both).
+        *   Go back to the "SQL Editor" and run the contents of `storage.sql` to set up access policies for the `quotations` bucket. This allows anonymous uploads and reads as configured in the file.
 
-### 5. Run the Application
+6.  **Prepare Assets (for PDF Generation):**
+    *   The PDF generation uses custom fonts and images.
+    *   The DejaVu fonts are included in `assets/fonts/`.
+    *   You need to provide the following image files in the `assets/` directory:
+        *   `assets/top_banner.png` (a banner image for the top of the PDF)
+        *   `assets/tripexplore-logo-with-rating.png` (a logo image)
+    *   If these images are not present, the PDF generation will print warnings and skip them.
+
+## ▶️ Running the Application
+
+Once the setup is complete, run the Streamlit application:
 
 ```bash
 streamlit run app.py
 ```
-The application should open in your web browser, typically at `http://localhost:8501`.
 
-## Usage Flow
+The application will open in your web browser, typically at `http://localhost:8501`.
 
-1.  **Submit New Enquiry:** Go to the "📝 New Enquiry" tab and fill in the travel details.
-2.  **Manage Enquiries & Generate:**
-    *   Go to the "🔍 Manage Enquiries & Generate" tab.
-    *   Select the newly created (or an existing) enquiry from the dropdown.
-    *   Click "Generate Itinerary with AI". View the generated itinerary.
-3.  **Add Vendor Reply:**
-    *   Go to the "✍️ Add Vendor Reply" tab.
-    *   Select the same enquiry.
-    *   Input the vendor's reply text (including pricing, inclusions, etc.).
-4.  **Generate Quotation:**
-    *   Return to the "🔍 Manage Enquiries & Generate" tab.
-    *   Ensure the correct enquiry is selected.
-    *   Click "Generate Quotation with AI". View the generated quotation.
+## 📖 Usage
 
-## Database Schema
+The application is organized into three main tabs:
 
-The following tables are used in Supabase:
+1.  **📝 New Enquiry:**
+    *   Fill in the travel details (Destination, Number of Days, Travelers, Trip Type).
+    *   Provide client information (Name, Mobile, City, Email).
+    *   Click "Submit Enquiry" to save the information to Supabase.
 
-*   **`enquiries`**: Stores initial customer travel enquiries.
-    *   `id` (UUID, PK)
-    *   `created_at` (TIMESTAMPTZ)
-    *   `destination` (TEXT)
-    *   `num_days` (INTEGER)
-    *   `traveler_count` (INTEGER)
-    *   `trip_type` (TEXT)
-    *   `status` (TEXT, e.g., 'New', 'Itinerary Generated')
-*   **`itineraries`**: Stores AI-generated itineraries.
-    *   `id` (UUID, PK)
-    *   `enquiry_id` (UUID, FK to `enquiries.id`)
-    *   `created_at` (TIMESTAMPTZ)
-    *   `itinerary_text` (TEXT)
-*   **`vendor_replies`**: Stores vendor replies.
-    *   `id` (UUID, PK)
-    *   `enquiry_id` (UUID, FK to `enquiries.id`)
-    *   `created_at` (TIMESTAMPTZ)
-    *   `reply_text` (TEXT)
-*   **`quotations`**: Stores generated quotations.
-    *   `id` (UUID, PK)
-    *   `enquiry_id` (UUID, FK to `enquiries.id`)
-    *   `created_at` (TIMESTAMPTZ)
-    *   `quotation_text` (TEXT)
-    *   `itinerary_used_id` (UUID, FK to `itineraries.id`, nullable)
-    *   `vendor_reply_used_id` (UUID, FK to `vendor_replies.id`, nullable)
+2.  **🔍 Manage Enquiries & Itinerary:**
+    *   Select an existing enquiry from the dropdown list.
+    *   View the details of the selected enquiry.
+    *   If an AI-generated itinerary already exists, it will be displayed.
+    *   Click "Generate Places Suggestions" to use an LLM (selected via the sidebar AI Configuration) to suggest places/attractions for the trip. The suggestions will be saved.
 
-*(For detailed `CREATE TABLE` statements, please refer to previous project discussions or inspect `supabase_utils.py` for schema comments if not explicitly listed here).*
+3.  **✍️ Add Vendor Reply & Generate Quotation:**
+    *   Select an enquiry. Its details and any existing itinerary/vendor reply will be loaded.
+    *   **Add/View Vendor Reply:**
+        *   Input or update the vendor's reply, including details like pricing, inclusions, exclusions, hotel information, etc.
+        *   Click "Submit/Update Vendor Reply" to save it.
+    *   **AI Quotation Generation:**
+        *   Ensure a vendor reply is available.
+        *   The system uses the enquiry details, AI-generated itinerary (from Tab 2 or database), and the vendor reply to generate a quotation.
+        *   Click "Generate Quotation PDF" to:
+            1.  Use an LLM to structure all information into a JSON.
+            2.  Generate a PDF document from this JSON.
+            3.  Upload the PDF to Supabase Storage.
+            4.  Save the quotation metadata (including the JSON and storage path) to the database.
+        *   Click "Generate Quotation DOCX" to:
+            1.  Perform the same LLM structuring and PDF generation as above.
+            2.  Convert the generated PDF bytes into DOCX format.
+            3.  Upload the DOCX to Supabase Storage.
+            4.  Update the quotation record in the database with the DOCX storage path.
+    *   **Download/View Quotation Files:**
+        *   Links to download/view stored PDF and DOCX files from Supabase Storage will appear (public or signed URLs).
+        *   Buttons to download locally generated PDF/DOCX files (from the current session before potential re-runs or selection changes) will also be available.
 
-## Future Enhancements (Beyond MVP)
+### Global AI Configuration (Sidebar)
 
-*   **Advanced AI Learning:** Train models on past sample quotations for company-specific formatting and style.
-*   **Email Integration:**
-    *   Auto-filler for template-based vendor request emails.
-    *   API-based email sender (SendGrid, Gmail API).
-    *   Email inbox viewer for quotation replies from vendors.
-*   **Sophisticated UI/UX:** More interactive elements, enquiry status tracking, editing capabilities.
-*   **Enhanced Vendor Reply Parsing:** More robust extraction of structured data from vendor replies.
-*   **User Authentication:** Secure access with user accounts.
-*   **File Uploads:** For raw `.txt` files or other document types.
-*   **Error Handling & Logging:** More comprehensive error management and logging.
-*   **Testing:** Unit and integration tests.
-*   **Deployment:** Streamlined deployment to cloud platforms (e.g., Streamlit Cloud, AWS, Google Cloud).
-*   **Document Processing:** Added support for DOCX and PDF file formats.
-*   **Database Management:** Includes complete schema definitions and cleanup scripts.
+*   Use the sidebar to select the AI Provider (Gemini or OpenRouter) that will be used for all LLM tasks (itinerary suggestions, quotation structuring).
+*   The currently active provider and model (for OpenRouter) are displayed.
 
-## Contributing
+## 🔑 Environment Variables
 
-Contributions are welcome! If you'd like to contribute, please follow these steps:
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/your-feature-name`).
-3.  Make your changes.
-4.  Commit your changes (`git commit -m 'Add some feature'`).
-5.  Push to the branch (`git push origin feature/your-feature-name`).
-6.  Open a Pull Request.
+The application requires the following environment variables to be set in the `.env` file:
 
-Please ensure your code follows existing style and includes relevant updates to documentation.
+*   `SUPABASE_URL`: Your Supabase project URL.
+*   `SUPABASE_KEY`: Your Supabase anon key (or service role key if your RLS policies require it).
+*   `GOOGLE_API_KEY`: Your API key for Google AI Studio (for Gemini).
+*   `OPENROUTER_API_KEY`: Your API key for OpenRouter.ai.
+*   `OPENROUTER_DEFAULT_MODEL`: (Optional) The default model to use with OpenRouter (e.g., `google/gemini-flash-1.5`, `openai/gpt-3.5-turbo`). Defaults to `google/gemini-flash-1.5` if not set.
+*   `OPENROUTER_HTTP_REFERER`: (Optional) Your site URL or app name, sent as `HTTP-Referer` to OpenRouter. Defaults to `http://localhost:3000`.
+*   `OPENROUTER_APP_TITLE`: (Optional) Your app's title, sent as `X-Title` to OpenRouter. Defaults to `AI Travel Quotation`.
 
-## License
+## 📊 Supabase Schema
 
-This project is open-source and available under the [MIT License](LICENSE.txt) (You would need to create a LICENSE.txt file with the MIT license text).
+The application uses the following tables in Supabase:
 
----
+*   `enquiries`: Stores initial customer travel enquiries.
+*   `clients`: Stores client/customer information linked to enquiries.
+*   `itineraries`: Stores AI-generated itineraries/place suggestions for enquiries.
+*   `vendor_replies`: Stores vendor replies (pricing, terms) related to an enquiry.
+*   `quotations`: Stores final generated quotations, including the structured JSON data, links to PDF/DOCX files in Supabase Storage, and references to the itinerary/vendor reply versions used.
 
-*This `README.md` was generated based on project discussions and aims to provide a comprehensive starting point. Please update it as the project evolves.*
+Refer to `schema.sql` for detailed table definitions and relationships.
+
+## 💡 Future Development Ideas
+
+*   More sophisticated AI prompting for itineraries and quotations.
+*   User authentication and roles.
+*   Direct email integration for sending quotations.
+*   Advanced quotation template customization.
+*   Status tracking for enquiries (e.g., 'New', 'Itinerary Generated', 'Quotation Sent').
+*   Image integration within the PDF itinerary (e.g., destination photos).
+
+## 📄 License
+
+This project is licensed under the MIT License. (Note: A `LICENSE.md` file is not included in the provided project files, but MIT is a common choice for such projects.)
 ```
-
-**Next Steps for You:**
-
-1.  **Create `LICENSE.txt`:** If you choose the MIT license (common for open-source), create a file named `LICENSE.txt` in your project root and paste the MIT License text into it. You can easily find the MIT License text online.
-2.  **Review and Customize:** Read through the generated `README.md`.
-    *   Fill in the `[Link to your Streamlit Cloud deployment if you have one]` if applicable.
-    *   The complete database schema with table definitions and RLS policies can be found in `schema.sql`. This file contains all `CREATE TABLE` statements and security configurations needed for the application.
-    *   Adjust any details that might have changed or that you want to emphasize.
-3.  **Commit and Push:**
-    ```bash
-    git add README.md requirements.txt app.py supabase_utils.py llm_utils.py .env.example .gitignore # Add other files as needed
-    git commit -m "feat: Initial project structure and README for AI Travel Agent MVP"
-    git push origin main # or your default branch
-    ```
-
-This README should give visitors to your GitHub repository a good understanding of your project!
