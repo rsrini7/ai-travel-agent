@@ -1,10 +1,11 @@
-# AI-Powered Travel Automation MVP
+# AI-Powered Travel Agent Automation
+Welcome to the AI-Powered Travel Agent Automation project! This project is a Streamlit application designed to automate the process of travel agent tasks, including managing travel enquiries, generating itinerary suggestions, inputting vendor replies, and generating professional-looking quotations in PDF and DOCX formats. The system leverages Large Language Models (LLMs) for content generation and Supabase for backend data storage and file management.
 
 ---
 
 ## 🚀 Overview
 
-This project is a **Minimum Viable Product (MVP)** demonstrating an AI-powered travel automation system. It allows users to manage travel enquiries, generate itinerary suggestions, input vendor replies, and automatically create professional-looking quotations in PDF and DOCX formats. The system leverages Large Language Models (LLMs) for content generation and Supabase for backend data storage and file management.
+This project is a **AI Travel Agent** demonstrating an AI-powered travel automation system. It allows users to manage travel enquiries, generate itinerary suggestions, input vendor replies, and automatically create professional-looking quotations in PDF and DOCX formats. The system leverages Large Language Models (LLMs) for content generation and Supabase for backend data storage and file management.
 
 ---
 
