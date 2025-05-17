@@ -1,8 +1,12 @@
 streamlit
 supabase
-# openai  <- Remove this or comment out
-# langchain-openai <- Remove this or comment out
 langchain
-langchain-google-genai # <- Add this
+langchain-google-genai
+langchain-community
 langgraph
 python-dotenv
+langchain-openai
+fpdf2
+pandas
+python-docx
+pdf2docx
