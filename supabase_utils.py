@@ -116,10 +116,13 @@ def get_vendor_reply_by_enquiry_id(enquiry_id: str):
         return None, _format_error_message(e, f"Unexpected error fetching vendor reply for enquiry {enquiry_id}")
 
 
-def add_quotation(enquiry_id: str, quotation_text: str, itinerary_id: str = None, vendor_reply_id: str = None):
+def add_quotation(enquiry_id: str, quotation_text: str, itinerary_used_id: str = None, vendor_reply_used_id: str = None):
     insert_data = { "enquiry_id": enquiry_id, "quotation_text": quotation_text }
-    if itinerary_id: insert_data["itinerary_used_id"] = itinerary_id
-    if vendor_reply_id: insert_data["vendor_reply_used_id"] = vendor_reply_id
+    if itinerary_used_id: 
+        insert_data["itinerary_used_id"] = itinerary_used_id
+    if vendor_reply_used_id: 
+        insert_data["vendor_reply_used_id"] = vendor_reply_used_id
+        
     try:
         response = supabase.table("quotations").insert(insert_data).execute()
         return response.data[0] if response and response.data else None, None

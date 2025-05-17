@@ -5,35 +5,40 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, Annotated, List
-import operator
+from typing import TypedDict, List # Removed Annotated, operator
 
 load_dotenv()
 
 def get_llm_instance():
-    """Creates and returns an LLM instance, ensuring API key is loaded."""
     api_key = os.getenv("GOOGLE_API_KEY")
+    print(f"LLM_UTILS (get_llm_instance): Key from env: {api_key[:5]}...{api_key[-5:] if api_key and len(api_key) > 10 else ' (short or missing)'}")
     if not api_key:
         print("LLM_UTILS: GOOGLE_API_KEY not found, attempting to load .env again.")
         load_dotenv(override=True)
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment variables even after trying to reload. Check .env file.")
-    
-    return ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash-latest",
-        google_api_key=api_key
-        # convert_system_message_to_human=True # <- REMOVE THIS LINE or set to False and test
-    )
+    return ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=api_key)
 
-def generate_itinerary_llm(enquiry_details: dict) -> str:
+# MODIFIED: AI Itinerary Generation (Now for places/suggestions)
+def generate_places_suggestion_llm(enquiry_details: dict) -> str:
+    """
+    Generates a list of suggested places/attractions using Langchain with Gemini.
+    enquiry_details: dict like {'destination': 'Paris', 'num_days': 3, 'traveler_count': 2, 'trip_type': 'Leisure'}
+    """
     try:
         llm = get_llm_instance()
-        # MODIFIED PROMPT: System message content moved into the human message
         prompt_template = ChatPromptTemplate.from_messages([
-            ("human", """You are a helpful travel assistant. Generate a concise day-by-day itinerary.
+            ("human", """You are a helpful travel assistant. 
+Based on the following enquiry, suggest a list of key places, attractions, or activities to cover. Do not create a day-wise plan. Just list the suggestions.
 
-Generate a {num_days}-day itinerary for {traveler_count} traveler(s) visiting {destination} for a {trip_type} trip. Focus on major attractions and suggest a balanced pace. Provide output as a simple text, day by day.""")
+Enquiry:
+- Destination: {destination}
+- Duration: {num_days} days
+- Travelers: {traveler_count}
+- Trip Type: {trip_type}
+
+Provide the output as a comma-separated list or a bulleted list of suggestions.""")
         ])
         output_parser = StrOutputParser()
         chain = prompt_template | llm | output_parser
@@ -41,79 +46,121 @@ Generate a {num_days}-day itinerary for {traveler_count} traveler(s) visiting {d
         response = chain.invoke(enquiry_details)
         return response
     except Exception as e:
-        print(f"Error generating itinerary with LLM (Gemini): {e}")
-        return f"Error: Could not generate itinerary. Detail: {e}"
+        print(f"Error generating place suggestions with LLM (Gemini): {e}")
+        return f"Error: Could not generate place suggestions. Detail: {e}"
+
+# --- LangGraph for Quotation Generation ---
 
 class QuotationState(TypedDict):
     enquiry_details: dict
-    itinerary_text: str
+    # itinerary_text: str # REMOVED - AI itinerary no longer directly used in quote
     vendor_reply_text: str
-    parsed_vendor_info: dict # Remove Annotated and operator.add
+    parsed_vendor_info: dict # This will now include itinerary from vendor
     final_quotation: str
 
 def fetch_data_node(state: QuotationState):
     print("---FETCHING DATA (Simulated, data passed in initial state)---")
     return {
         "enquiry_details": state["enquiry_details"],
-        "itinerary_text": state["itinerary_text"],
         "vendor_reply_text": state["vendor_reply_text"]
+        # "itinerary_text" is no longer passed here
     }
 
-def parse_vendor_reply_node(state: QuotationState):
+def parse_vendor_reply_node(state: QuotationState): # MODIFIED
     print("---PARSING VENDOR REPLY (GEMINI)---")
     vendor_reply = state["vendor_reply_text"]
-    
+    enquiry_details = state["enquiry_details"] # For context if needed by LLM
+
     try:
         llm = get_llm_instance()
-        # MODIFIED PROMPT: System message content moved into the human message
+        # MODIFIED PROMPT: Now asking to extract itinerary from vendor reply
         prompt = ChatPromptTemplate.from_messages([
-            ("human", """You are an expert at parsing vendor replies for travel quotations. Extract key information like total price, inclusions (list them), and exclusions (list them). If not found, state 'Not specified'. Output in a simple key: value format or a short summary.
+            ("human", """You are an expert at parsing vendor replies for travel quotations. 
+From the vendor reply provided below, extract the following information:
+1.  **Proposed Itinerary:** (Extract the day-by-day plan or sequence of activities if available. If not explicitly day-wise, extract the described tour flow. If no itinerary, state 'Itinerary not specified by vendor.')
+2.  **Total Price:** (e.g., USD 1200, INR 50000. If not found, state 'Not specified'.)
+3.  **Inclusions:** (List them. If not found, state 'Not specified'.)
+4.  **Exclusions:** (List them. If not found, state 'Not specified'.)
 
-Parse the following vendor reply and extract total price, inclusions, and exclusions:
+Vendor Reply:
+---
+{vendor_reply}
+---
 
-{vendor_reply}""")
+Enquiry Context (for your reference, if needed to understand the reply):
+- Destination: {destination}
+- Duration: {num_days} days
+
+Output the extracted information clearly, for example:
+Itinerary:
+Day 1: ...
+Day 2: ...
+Price: ...
+Inclusions:
+- ...
+Exclusions:
+- ...
+""")
         ])
-        parser = StrOutputParser()
+        parser = StrOutputParser() # Keep as StrOutputParser, we'll parse the string output in the next step or rely on the LLM's structure
         chain = prompt | llm | parser
         
-        parsed_info_str = chain.invoke({"vendor_reply": vendor_reply})
-        return {"parsed_vendor_info": {"summary": parsed_info_str}}
+        # For structured output, you might consider JsonOutputParser, but for MVP StrOutputParser is fine
+        # if the prompt is good at guiding the LLM to a consistent string format.
+        parsed_info_str = chain.invoke({
+            "vendor_reply": vendor_reply,
+            "destination": enquiry_details.get("destination"),
+            "num_days": enquiry_details.get("num_days")
+        })
+        # We expect the LLM to give a string. We'll pass this whole string
+        # to the next node, or you could try to parse it here into a dict.
+        # For simplicity, let's assume the next node can handle this string.
+        # Or, better, let's try to make this node return a more structured dict.
+        # This requires more robust parsing of parsed_info_str or a JsonOutputParser.
+        # For now, let's keep it simple and assume the formatting node's LLM can work with this.
+        
+        # A more robust approach here would be to use another LLM call or regex to split parsed_info_str
+        # into 'itinerary', 'price', 'inclusions', 'exclusions'.
+        # For MVP, we can pass the whole string as "summary" and adjust the final formatting prompt.
+
+        # Let's adjust the final formatting prompt to expect this combined string.
+        return {"parsed_vendor_info": {"full_details_from_vendor": parsed_info_str}}
+
     except Exception as e:
         print(f"Error parsing vendor reply with LLM (Gemini): {e}")
-        return {"parsed_vendor_info": {"summary": f"Error parsing vendor reply. Detail: {e}"}}
+        return {"parsed_vendor_info": {"full_details_from_vendor": f"Error parsing vendor reply. Detail: {e}"}}
 
 
-def combine_and_format_node(state: QuotationState):
+def combine_and_format_node(state: QuotationState): # MODIFIED
     print("---COMBINING AND FORMATTING QUOTATION (GEMINI)---")
     enquiry = state["enquiry_details"]
-    itinerary = state["itinerary_text"]
+    # itinerary_from_ai = state["itinerary_text"] # REMOVED
+    
     parsed_vendor_info_dict = state.get("parsed_vendor_info", {})
-    vendor_summary = parsed_vendor_info_dict.get("summary", "Vendor details not available.")
+    # This now contains the itinerary, price, inclusions, exclusions as extracted by the previous node
+    vendor_extracted_details = parsed_vendor_info_dict.get("full_details_from_vendor", "Vendor details not available or parsing failed.")
 
     try:
         llm = get_llm_instance()
-        # MODIFIED PROMPT: System message content moved into the human message
+        # MODIFIED PROMPT: Itinerary now comes from vendor_extracted_details
         prompt = ChatPromptTemplate.from_messages([
-            ("human", """You are a travel agent creating a client quotation. Combine the itinerary and vendor information into a professional, clean, and structured quotation. Start with a greeting, include trip details, the day-wise itinerary, vendor pricing/inclusions, and a closing remark.
+            ("human", """You are a travel agent creating a client quotation.
+Use the **details extracted from the vendor's reply** to construct the quotation. This includes the itinerary, pricing, inclusions, and exclusions provided by the vendor.
 
-Create a quotation based on the following:
-Enquiry Details:
+Client Enquiry Details (for context and salutation):
 - Destination: {destination}
 - Number of Days: {num_days}
 - Traveler Count: {traveler_count}
 - Trip Type: {trip_type}
 
-Proposed Itinerary:
+Vendor's Proposed Details (Itinerary, Price, Inclusions, Exclusions):
 ---
-{itinerary}
----
-
-Vendor Information (Pricing, Inclusions/Exclusions):
----
-{vendor_info}
+{vendor_extracted_details}
 ---
 
-Format it clearly.""")
+Format the quotation professionally and clearly. Start with a greeting, include the trip overview based on the enquiry, then present the vendor's proposed itinerary and commercial details. End with a closing remark.
+If the vendor details mention 'Not specified' for any section, reflect that appropriately.
+""")
         ])
         parser = StrOutputParser()
         chain = prompt | llm | parser
@@ -123,8 +170,7 @@ Format it clearly.""")
             "num_days": enquiry.get("num_days", "N/A"),
             "traveler_count": enquiry.get("traveler_count", "N/A"),
             "trip_type": enquiry.get("trip_type", "N/A"),
-            "itinerary": itinerary,
-            "vendor_info": vendor_summary
+            "vendor_extracted_details": vendor_extracted_details
         })
         return {"final_quotation": final_quotation_text}
     except Exception as e:
@@ -145,10 +191,10 @@ workflow.add_edge("format_quotation", END)
 
 quotation_generation_graph = workflow.compile()
 
-def run_quotation_generation_graph(enquiry_details: dict, itinerary_text: str, vendor_reply_text: str) -> str:
+def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str) -> str: # itinerary_text REMOVED
     initial_state = {
         "enquiry_details": enquiry_details,
-        "itinerary_text": itinerary_text,
+        # "itinerary_text": itinerary_text, # REMOVED
         "vendor_reply_text": vendor_reply_text,
         "parsed_vendor_info": {},
         "final_quotation": ""
