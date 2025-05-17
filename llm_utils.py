@@ -2,32 +2,56 @@
 import os
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, List # Removed Annotated, operator
+from typing import TypedDict
 
 load_dotenv()
 
-def get_llm_instance():
-    api_key = os.getenv("GOOGLE_API_KEY")
-    print(f"LLM_UTILS (get_llm_instance): Key from env: {api_key[:5]}...{api_key[-5:] if api_key and len(api_key) > 10 else ' (short or missing)'}")
-    if not api_key:
-        print("LLM_UTILS: GOOGLE_API_KEY not found, attempting to load .env again.")
-        load_dotenv(override=True)
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment variables even after trying to reload. Check .env file.")
-    return ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=api_key)
-
-# MODIFIED: AI Itinerary Generation (Now for places/suggestions)
-def generate_places_suggestion_llm(enquiry_details: dict) -> str:
+def get_llm_instance(provider: str):
     """
-    Generates a list of suggested places/attractions using Langchain with Gemini.
-    enquiry_details: dict like {'destination': 'Paris', 'num_days': 3, 'traveler_count': 2, 'trip_type': 'Leisure'}
+    Returns an LLM instance based on the specified provider.
+    """
+    if provider == "Gemini":
+        api_key = os.getenv("GOOGLE_API_KEY")
+        print(f"LLM_UTILS (get_llm_instance for Gemini): GOOGLE_API_KEY {'FOUND' if api_key else 'NOT FOUND'}")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY not found for Gemini. Check .env file and ensure it's loaded.")
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=api_key)
+    elif provider == "OpenRouter":
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        # Default to a common model if not specified in .env, or let OpenRouter decide if model_name is None
+        model_name = os.getenv("OPENROUTER_DEFAULT_MODEL", "google/gemini-flash-1.5") 
+        print(f"LLM_UTILS (get_llm_instance for OpenRouter): OPENROUTER_API_KEY {'FOUND' if api_key else 'NOT FOUND'}, Model: {model_name}")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY not found for OpenRouter. Check .env file and ensure it's loaded.")
+        # Get HTTP_REFERER and X_TITLE from environment variables or use defaults
+        http_referer = os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:3000") # Replace with your actual site URL
+        app_title = os.getenv("OPENROUTER_APP_TITLE", "AI Travel Quotation") # Replace with your actual app name
+
+        # Explicitly set Authorization header for OpenRouter
+        headers = {
+            "HTTP-Referer": http_referer,
+            "X-Title": app_title,
+        }
+
+        return ChatOpenAI(
+            model=model_name,
+            openai_api_key=api_key, # Pass the API key directly to the client
+            base_url="https://openrouter.ai/api/v1",
+            default_headers=headers
+        )
+    else:
+        raise ValueError(f"Unsupported AI provider: {provider}. Supported providers are 'Gemini', 'OpenRouter'.")
+
+def generate_places_suggestion_llm(enquiry_details: dict, provider: str) -> str:
+    """
+    Generates a list of suggested places/attractions using Langchain with the specified provider.
     """
     try:
-        llm = get_llm_instance()
+        llm = get_llm_instance(provider)
         prompt_template = ChatPromptTemplate.from_messages([
             ("human", """You are a helpful travel assistant. 
 Based on the following enquiry, suggest a list of key places, attractions, or activities to cover. Do not create a day-wise plan. Just list the suggestions.
@@ -46,34 +70,36 @@ Provide the output as a comma-separated list or a bulleted list of suggestions."
         response = chain.invoke(enquiry_details)
         return response
     except Exception as e:
-        print(f"Error generating place suggestions with LLM (Gemini): {e}")
-        return f"Error: Could not generate place suggestions. Detail: {e}"
+        print(f"Error generating place suggestions with LLM ({provider}): {e}")
+        return f"Error: Could not generate place suggestions using {provider}. Detail: {e}"
 
 # --- LangGraph for Quotation Generation ---
 
 class QuotationState(TypedDict):
     enquiry_details: dict
-    # itinerary_text: str # REMOVED - AI itinerary no longer directly used in quote
     vendor_reply_text: str
-    parsed_vendor_info: dict # This will now include itinerary from vendor
+    parsed_vendor_info: dict
     final_quotation: str
+    ai_provider: str # To know which LLM to use in nodes
 
 def fetch_data_node(state: QuotationState):
-    print("---FETCHING DATA (Simulated, data passed in initial state)---")
+    print("---FETCHING DATA (Passed in initial state)---")
+    # Data is already in state, this node mainly acts as an entry point or could fetch additional data if needed.
+    # We ensure ai_provider is part of the state passed along.
     return {
         "enquiry_details": state["enquiry_details"],
-        "vendor_reply_text": state["vendor_reply_text"]
-        # "itinerary_text" is no longer passed here
+        "vendor_reply_text": state["vendor_reply_text"],
+        "ai_provider": state["ai_provider"] 
     }
 
-def parse_vendor_reply_node(state: QuotationState): # MODIFIED
-    print("---PARSING VENDOR REPLY (GEMINI)---")
+def parse_vendor_reply_node(state: QuotationState):
+    print(f"---PARSING VENDOR REPLY ({state['ai_provider']})---")
     vendor_reply = state["vendor_reply_text"]
-    enquiry_details = state["enquiry_details"] # For context if needed by LLM
+    enquiry_details = state["enquiry_details"]
+    provider = state["ai_provider"]
 
     try:
-        llm = get_llm_instance()
-        # MODIFIED PROMPT: Now asking to extract itinerary from vendor reply
+        llm = get_llm_instance(provider)
         prompt = ChatPromptTemplate.from_messages([
             ("human", """You are an expert at parsing vendor replies for travel quotations. 
 From the vendor reply provided below, extract the following information:
@@ -102,47 +128,31 @@ Exclusions:
 - ...
 """)
         ])
-        parser = StrOutputParser() # Keep as StrOutputParser, we'll parse the string output in the next step or rely on the LLM's structure
+        parser = StrOutputParser()
         chain = prompt | llm | parser
         
-        # For structured output, you might consider JsonOutputParser, but for MVP StrOutputParser is fine
-        # if the prompt is good at guiding the LLM to a consistent string format.
         parsed_info_str = chain.invoke({
             "vendor_reply": vendor_reply,
             "destination": enquiry_details.get("destination"),
             "num_days": enquiry_details.get("num_days")
         })
-        # We expect the LLM to give a string. We'll pass this whole string
-        # to the next node, or you could try to parse it here into a dict.
-        # For simplicity, let's assume the next node can handle this string.
-        # Or, better, let's try to make this node return a more structured dict.
-        # This requires more robust parsing of parsed_info_str or a JsonOutputParser.
-        # For now, let's keep it simple and assume the formatting node's LLM can work with this.
-        
-        # A more robust approach here would be to use another LLM call or regex to split parsed_info_str
-        # into 'itinerary', 'price', 'inclusions', 'exclusions'.
-        # For MVP, we can pass the whole string as "summary" and adjust the final formatting prompt.
-
-        # Let's adjust the final formatting prompt to expect this combined string.
         return {"parsed_vendor_info": {"full_details_from_vendor": parsed_info_str}}
 
     except Exception as e:
-        print(f"Error parsing vendor reply with LLM (Gemini): {e}")
-        return {"parsed_vendor_info": {"full_details_from_vendor": f"Error parsing vendor reply. Detail: {e}"}}
+        print(f"Error parsing vendor reply with LLM ({provider}): {e}")
+        return {"parsed_vendor_info": {"full_details_from_vendor": f"Error parsing vendor reply using {provider}. Detail: {e}"}}
 
 
-def combine_and_format_node(state: QuotationState): # MODIFIED
-    print("---COMBINING AND FORMATTING QUOTATION (GEMINI)---")
+def combine_and_format_node(state: QuotationState):
+    print(f"---COMBINING AND FORMATTING QUOTATION ({state['ai_provider']})---")
     enquiry = state["enquiry_details"]
-    # itinerary_from_ai = state["itinerary_text"] # REMOVED
+    provider = state["ai_provider"]
     
     parsed_vendor_info_dict = state.get("parsed_vendor_info", {})
-    # This now contains the itinerary, price, inclusions, exclusions as extracted by the previous node
     vendor_extracted_details = parsed_vendor_info_dict.get("full_details_from_vendor", "Vendor details not available or parsing failed.")
 
     try:
-        llm = get_llm_instance()
-        # MODIFIED PROMPT: Itinerary now comes from vendor_extracted_details
+        llm = get_llm_instance(provider)
         prompt = ChatPromptTemplate.from_messages([
             ("human", """You are a travel agent creating a client quotation.
 Use the **details extracted from the vendor's reply** to construct the quotation. This includes the itinerary, pricing, inclusions, and exclusions provided by the vendor.
@@ -174,8 +184,8 @@ If the vendor details mention 'Not specified' for any section, reflect that appr
         })
         return {"final_quotation": final_quotation_text}
     except Exception as e:
-        print(f"Error formatting final quotation with LLM (Gemini): {e}")
-        return {"final_quotation": f"Error generating final quotation. Detail: {e}"}
+        print(f"Error formatting final quotation with LLM ({provider}): {e}")
+        return {"final_quotation": f"Error generating final quotation using {provider}. Detail: {e}"}
 
 # Define the graph
 workflow = StateGraph(QuotationState)
@@ -191,17 +201,17 @@ workflow.add_edge("format_quotation", END)
 
 quotation_generation_graph = workflow.compile()
 
-def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str) -> str: # itinerary_text REMOVED
+def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str, provider: str) -> str:
     initial_state = {
         "enquiry_details": enquiry_details,
-        # "itinerary_text": itinerary_text, # REMOVED
         "vendor_reply_text": vendor_reply_text,
         "parsed_vendor_info": {},
-        "final_quotation": ""
+        "final_quotation": "",
+        "ai_provider": provider # Pass the selected provider to the graph state
     }
     try:
         final_state = quotation_generation_graph.invoke(initial_state)
-        return final_state.get("final_quotation", "Error: Quotation not generated (Gemini).")
+        return final_state.get("final_quotation", f"Error: Quotation not generated ({provider}).")
     except Exception as e:
-        print(f"Error running quotation graph (Gemini): {e}")
-        return f"Critical error in quotation generation graph (Gemini): {e}"
+        print(f"Error running quotation graph ({provider}): {e}")
+        return f"Critical error in quotation generation graph ({provider}): {e}"
