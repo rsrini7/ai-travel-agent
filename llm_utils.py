@@ -169,8 +169,8 @@ class PDFQuotation(FPDF):
 
         logo_rating_path = os.path.join("assets", "tripexplore-logo-with-rating.png")
         if os.path.exists(logo_rating_path):
-            img_w = 80 
-            img_h = 25 # Estimate, or get dynamically if PIL is used
+            img_w = 150 
+            img_h = 50 # Estimate, or get dynamically if PIL is used
             try:
                 self.image(logo_rating_path, x=(self.w - img_w) / 2, y=self.get_y(), w=img_w) 
                 self.ln(img_h + 5) 
@@ -180,10 +180,6 @@ class PDFQuotation(FPDF):
         else:
             self.ln(20) 
             print(f"Warning: {logo_rating_path} not found.")
-
-        self.set_draw_color(*self.line_color)
-        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
-        self.ln(10)
 
         self.set_font("DejaVu", "I", 10) 
         self.set_text_color(*self.text_color_light)
@@ -453,11 +449,29 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
 
     json_prompt_template = """
 You are a travel agent assistant preparing data for a PDF quotation document.
-Combine the Client Enquiry Details and the Parsed Vendor Information into a single, structured JSON object.
+Your goal is to transform the Client Enquiry Details and the Parsed Vendor Information into a single, structured JSON object.
 Strictly adhere to the JSON format and all specified keys. Ensure all string values are properly escaped for JSON.
-The "detailed_itinerary" should be a list of objects, each with "day_number" (string), "title" (string), and "description" (string).
-The "hotel_details" should be a list of objects, each with "destination_location" (string), "hotel_name" (string), and "nights" (string or number).
-"inclusions" and "exclusions" should be lists of strings.
+
+**Crucial Task: Detailed Itinerary Generation**
+- You MUST generate a comprehensive, engaging, day-wise itinerary for the full duration of `{num_days}` days.
+- Source information primarily from the "Proposed Itinerary" section of the "Parsed Vendor Information."
+- **Structure each day** within the "detailed_itinerary" list as an object containing:
+    - "day_number": (String, e.g., "Day 1", "Day 2")
+    - "title": (String, a concise and appealing headline for the day's activities, e.g., "Arrival in Paris & Eiffel Tower Magic", "Exploring Ancient Rome: Colosseum & Forum")
+    - "description": (String, a well-written paragraph or two detailing the day's activities, sightseeing, meals if specified, and flow. Use descriptive language to make it sound attractive to the client.)
+- **Completeness:**
+    - If the vendor's itinerary is detailed and covers all `{num_days}` days, adapt it to the structure above, enhancing descriptions where possible.
+    - If the vendor's itinerary is brief, missing days, or not strictly day-wise:
+        - You MUST expand upon it logically to cover all `{num_days}` days.
+        - For any missing days, creatively and plausibly generate activities based on the destination (`{destination}`), trip type (`{trip_type}`), and common tourist interests for such a trip. Make it sound like a coherent and well-planned experience.
+        - Ensure a smooth flow between days.
+- **If the vendor reply provides NO itinerary details at all:**
+    - You MUST create a compelling, generic, day-wise itinerary for `{num_days}` days in `{destination}` suitable for a `{trip_type}` trip.
+    - In the description of "Day 1" for such a generated itinerary, include a note like: "(Please note: This is a suggested itinerary based on popular activities. We can customize it further to your preferences.)"
+- **Beautification & Clarity:**
+    - Use clear, professional, and engaging language throughout the itinerary descriptions.
+    - Avoid jargon. Highlight key experiences.
+    - Ensure correct grammar and spelling.
 
 Client Enquiry Details:
 - Destination: {destination}
@@ -466,41 +480,60 @@ Client Enquiry Details:
 - Trip Type: {trip_type}
 - Client Name (if available, use "Mr./Ms. [Client Name]", else "Mr./Ms. Valued Client"): {client_name_placeholder}
 
-Parsed Vendor Information:
+Parsed Vendor Information (This contains what the vendor provided, including their proposed itinerary if any):
 ---
 {vendor_parsed_text}
 ---
 
-**Output JSON Structure (fill all keys, use "Not specified", default values, or empty lists [] if info is unavailable from vendor text):**
+**Output JSON Structure (fill all keys, use "Not specified", default values, or empty lists [] if info is unavailable and cannot be plausibly generated for non-itinerary fields):**
 ```json
 {{
   "client_name": "{client_name_placeholder}",
-  "quotation_title": "Tour Package for {destination}",
+  "quotation_title": "Your Exclusive Travel Package to {destination}",
   "destination_summary": "{destination}",
-  "duration_summary": "{num_days} Days / {num_nights} Nights", 
-  "dates_summary": "Flexible / To be confirmed",
-  "meal_plan_summary": "Refer to itinerary details or vendor inclusions",
-  "vehicle_summary": "Private AC Vehicle as per itinerary or vendor inclusions",
-  "main_image_placeholder_text": "Image representing {destination}",
+  "duration_summary": "{num_days} Days / {num_nights} Nights of Adventure & Discovery",
+  "dates_summary": "Flexible Travel Dates (To be finalized)",
+  "meal_plan_summary": "As per detailed itinerary (typically daily breakfast, other meals may be specified)",
+  "vehicle_summary": "Comfortable Private AC Vehicle for all transfers and sightseeing as per itinerary",
+  "main_image_placeholder_text": "A Glimpse of {destination}'s Charm",
   
-  "itinerary_title": "Proposed Itinerary for your {trip_type} to {destination}",
+  "itinerary_title": "Your Personalized {num_days}-Day Journey in {destination}",
   "detailed_itinerary": [ 
-    {{ "day_number": "Day 1", "title": "Arrival in {destination} & Transfer to Hotel", "description": "Upon arrival at {destination} airport/station, meet our representative and transfer to your pre-booked hotel. Check-in and relax. Evening free for leisure or explore nearby areas. Overnight stay in {destination}."}}
+    // Example for ONE day. Generate for ALL {num_days} days following the detailed instructions above.
+    {{ 
+      "day_number": "Day 1", 
+      "title": "Arrival in {destination} & Evening at Leisure", 
+      "description": "Welcome to the vibrant city of {destination}! Upon your arrival at the international airport/railway station, our friendly representative will greet you and assist with a smooth transfer to your pre-booked hotel. Complete your check-in formalities and take some time to relax and settle in. The rest of the evening is yours to explore the nearby surroundings at your own pace, perhaps indulging in some local snacks or simply soaking in the new atmosphere. Enjoy a comfortable overnight stay at your hotel in {destination}."
+    }} 
+    // ... more day objects up to Day {num_days} ...
   ],
   "hotel_details": [
-    {{ "destination_location": "{destination}", "hotel_name": "Standard Category Hotel (or similar)", "nights": "{num_nights}" }}
+    {{ "destination_location": "{destination}", "hotel_name": "Selected 3-Star/4-Star Hotel (or similar, based on package)", "nights": "{num_nights}" }}
   ],
 
-  "cost_per_head": "Not specified", 
+  "cost_per_head": "To be advised based on final customization", 
   "total_pax_for_cost": "{traveler_count}",
-  "total_package_cost": "Not specified",
+  "total_package_cost": "Please refer to final proposal",
   "currency": "INR", 
 
-  "inclusions": ["Accommodation in specified hotels", "Meals as per itinerary (e.g., Breakfast)", "Transfers and sightseeing by AC vehicle", "All applicable hotel taxes"],
-  "exclusions": ["Airfare/Train fare", "Visa fees", "Early check-in/late check-out charges", "Personal expenses", "Anything not mentioned in inclusions"],
+  "inclusions": [
+      "Accommodation in well-appointed rooms at specified category hotels.",
+      "Daily breakfast at the hotel (unless specified otherwise).",
+      "All transfers, sightseeing, and inter-city travel by a private air-conditioned vehicle.",
+      "Driver's allowance, fuel charges, parking fees, and toll taxes.",
+      "All applicable hotel and transport taxes."
+    ],
+  "exclusions": [
+      "International or domestic airfare/train fare unless specified.",
+      "Visa charges, travel insurance.",
+      "Any meals other than those mentioned in the itinerary (e.g., lunch, dinner).",
+      "Entrance fees to monuments, museums, parks, and attractions.",
+      "Personal expenses such as laundry, telephone calls, tips, porterage, etc.",
+      "Any services not explicitly mentioned in the 'Inclusions' section."
+    ],
   
-  "gst_note": "GST is additional at 5% and is subject to RBI Regulations.",
-  "tcs_note_short": "TCS as per government regulations will be applicable for overseas packages.",
+  "gst_note": "GST (Goods and Services Tax) will be applicable as per government norms, currently 5% on tour packages.",
+  "tcs_note_short": "TCS may be applicable for overseas packages as per prevailing government regulations.",
   
   "company_contact_person": "V.R.Viswanathan",
   "company_phone": "+91-8884016046",
@@ -508,21 +541,19 @@ Parsed Vendor Information:
   "company_website": "www.tripexplore.in",
 
   "standard_exclusions_list": [
-        "5% TCS will be returned to your PAN and can be claimed while filing Income Tax (for applicable overseas packages).",
-        "Meals other than those specified are not included.",
-        "Additional facility usage at the hotel is chargeable.",
-        "Tips are not mandatory.",
-        "Travel insurance is not mandatory (but highly recommended)."
+        "Expenses of personal nature like tips, laundry, phone calls, alcoholic beverages etc.",
+        "Any increase in airfare, visa fees, or taxes levied by the government.",
+        "Cost of any optional tours, activities, or services.",
+        "Early check-in & late check-out charges at hotels (standard check-in/out times apply)."
   ],
   "important_notes": [
-      "All services are subject to availability at the time of booking.",
-      "Rates may change if travel dates, number of pax, or hotels change.",
-      "This quotation is valid for 7 days from the date of issue, unless specified otherwise."
+      "This is a proposed itinerary and is subject to change/customization based on your preferences and availability.",
+      "All hotel accommodations are subject to availability at the time of booking. In case of unavailability, similar category hotels will be provided.",
+      "Rates are valid for the period mentioned and for Indian nationals only, unless specified otherwise.",
+      "Standard check-in time at hotels is 14:00 hrs and check-out is 12:00 hrs."
   ],
   "tcs_rules_full": "Note: Effective 01 October 2023, 'Tax Collected at Source' (TCS), will be at 5% till Rs. 7 lakh, and 20% thereafter, for all Cumulative Payments made against a PAN in the Current Financial Year. The Buyer will have to Furnish an Undertaking on their spends for Overseas Tour Packages/ Cruises in the year. The Government of India, Ministry of Finance, via Circular No. 10 of 2023, F. No. 37 014212312023-TPL, dated 30th June, 2023, has clarified that the information is to be furnished by the buyer in an undertaking and any false information will merit appropriate action against the buyer under the Finance Act, 2023 amended sub-section (1G) of section 206C of the income-tax Act, 1961."
-}}
-
-"""
+}}"""
     try:
         llm = get_llm_instance(provider)
         num_days_int = int(enquiry.get("num_days", 0))
