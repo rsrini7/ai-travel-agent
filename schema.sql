@@ -55,6 +55,24 @@ COMMENT ON COLUMN public.quotations.enquiry_id IS 'Foreign key linking to the pa
 COMMENT ON COLUMN public.quotations.itinerary_used_id IS 'Foreign key to the specific itinerary version used for this quote.';
 COMMENT ON COLUMN public.quotations.vendor_reply_used_id IS 'Foreign key to the specific vendor reply version used for this quote.';
 
+-- Create clients table
+CREATE TABLE public.clients (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    enquiry_id UUID NOT NULL REFERENCES public.enquiries(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    name TEXT NOT NULL,
+    mobile TEXT NOT NULL,
+    city TEXT NOT NULL,
+    email TEXT
+);
+
+-- Optional: Index on enquiry_id for faster lookups
+CREATE INDEX idx_clients_enquiry_id ON public.clients(enquiry_id);
+
+-- Optional: Add comments for clarity in Supabase UI
+COMMENT ON TABLE public.clients IS 'Stores client/customer information for enquiries.';
+COMMENT ON COLUMN public.clients.enquiry_id IS 'Foreign key linking to the parent enquiry.';
+
 -- Enable RLS and create policies for all tables
 ALTER TABLE public.itineraries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public anon access"
@@ -83,6 +101,14 @@ WITH CHECK (true);
 ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY; 
 CREATE POLICY "Public anon access"
 ON public.enquiries
+FOR ALL
+TO anon
+USING (true)
+WITH CHECK (true);
+
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public anon access"
+ON public.clients
 FOR ALL
 TO anon
 USING (true)

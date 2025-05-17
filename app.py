@@ -66,31 +66,54 @@ if st.session_state.selected_ai_provider == "OpenRouter":
     st.sidebar.caption(f"OpenRouter Model: {openrouter_model}")
 
 
-with tab1: # No changes to Tab 1
+with tab1:
     st.header("1. Submit New Enquiry")
     with st.form("new_enquiry_form"):
+        st.subheader("Travel Details")
         destination = st.text_input("Destination", placeholder="e.g., Paris, France")
         num_days = st.number_input("Number of Days", min_value=1, value=7)
         traveler_count = st.number_input("Number of Travelers", min_value=1, value=2)
         trip_type = st.selectbox("Trip Type", ["Leisure", "Business", "Adventure", "Honeymoon", "Family"])
         
+        st.subheader("Client Information")
+        client_name = st.text_input("Client Name", placeholder="John Doe")
+        client_mobile = st.text_input("Mobile Number", placeholder="+91XXXXXXXXXX")
+        client_city = st.text_input("City", placeholder="Mumbai")
+        client_email = st.text_input("Email (optional)", placeholder="john@example.com")
+        
         submitted_enquiry = st.form_submit_button("Submit Enquiry")
         if submitted_enquiry:
             if not destination:
                 st.error("Destination is required.")
+            elif not client_name or not client_mobile or not client_city:
+                st.error("Client name, mobile and city are required.")
             else:
                 with st.spinner("Submitting enquiry..."):
+                    # First add the enquiry
                     enquiry_data, error_msg = add_enquiry(destination, num_days, traveler_count, trip_type)
                     if enquiry_data:
-                        st.success(f"Enquiry submitted successfully! ID: {enquiry_data['id']}")
-                        st.session_state.selected_enquiry_id = enquiry_data['id']
-                        st.session_state.current_ai_suggestions = None 
-                        st.session_state.current_ai_suggestions_id = None
-                        st.session_state.selected_enquiry_id_tab3 = enquiry_data['id']
-                        st.session_state.tab3_enquiry_details = None
-                        st.session_state.tab3_itinerary_info = None
-                        st.session_state.tab3_vendor_reply_info = None
-                        st.session_state.tab3_quotation_pdf_bytes = None 
+                        # Then add client information
+                        from supabase_utils import add_client
+                        client_data, client_error = add_client(
+                            enquiry_id=enquiry_data['id'],
+                            name=client_name,
+                            mobile=client_mobile,
+                            city=client_city,
+                            email=client_email
+                        )
+                        
+                        if client_data:
+                            st.success(f"Enquiry and client information submitted successfully! ID: {enquiry_data['id']}")
+                            st.session_state.selected_enquiry_id = enquiry_data['id']
+                            st.session_state.current_ai_suggestions = None 
+                            st.session_state.current_ai_suggestions_id = None
+                            st.session_state.selected_enquiry_id_tab3 = enquiry_data['id']
+                            st.session_state.tab3_enquiry_details = None
+                            st.session_state.tab3_itinerary_info = None
+                            st.session_state.tab3_vendor_reply_info = None
+                            st.session_state.tab3_quotation_pdf_bytes = None 
+                        else:
+                            st.error(f"Enquiry submitted but failed to save client information. {client_error if client_error else 'Unknown error'}")
                     else:
                         st.error(f"Failed to submit enquiry. {error_msg if error_msg else 'Unknown error'}")
 
@@ -248,10 +271,12 @@ with tab3:
             if st.session_state.tab3_enquiry_details is None:
                 st.session_state.tab3_enquiry_details, _ = get_enquiry_by_id(active_enquiry_id_tab3)
             
-            if st.session_state.tab3_itinerary_info is None:
+            if st.session_state.tab3_itinerary_info is None or st.session_state.tab3_itinerary_info['id'] != st.session_state.current_ai_suggestions_id:
                 itinerary_data, _ = get_itinerary_by_enquiry_id(active_enquiry_id_tab3)
                 if itinerary_data:
                     st.session_state.tab3_itinerary_info = {'text': itinerary_data['itinerary_text'], 'id': itinerary_data['id']}
+                elif st.session_state.current_ai_suggestions:
+                    st.session_state.tab3_itinerary_info = {'text': st.session_state.current_ai_suggestions, 'id': st.session_state.current_ai_suggestions_id}
                 else:
                     st.session_state.tab3_itinerary_info = {'text': "No itinerary generated yet.", 'id': None}
 

@@ -15,6 +15,35 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def add_client(enquiry_id: str, name: str, mobile: str, city: str, email: str = None) -> tuple[dict, str]:
+    """
+    Adds client information to the clients table.
+    
+    Args:
+        enquiry_id: The ID of the related enquiry
+        name: Client's full name
+        mobile: Client's mobile number
+        city: Client's city
+        email: Client's email (optional)
+        
+    Returns:
+        tuple: (client_data, error_message) where client_data is the inserted record or None
+    """
+    try:
+        client_data = supabase.table('clients').insert({
+            'enquiry_id': enquiry_id,
+            'name': name,
+            'mobile': mobile,
+            'city': city,
+            'email': email
+        }).execute()
+        
+        if client_data.data:
+            return client_data.data[0], None
+        return None, "No data returned from Supabase"
+    except Exception as e:
+        return None, str(e)
+
 def _format_error_message(e, context_message="Error"):
     if isinstance(e, APIError):
         error_details = f"Code: {e.code}, Message: {e.message}"
