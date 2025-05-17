@@ -40,18 +40,26 @@ COMMENT ON COLUMN public.vendor_replies.enquiry_id IS 'Foreign key linking to th
 
 CREATE TABLE public.quotations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    enquiry_id UUID NOT NULL REFERENCES public.enquiries(id) ON DELETE CASCADE, -- Link to the enquiry
+    enquiry_id UUID NOT NULL REFERENCES public.enquiries(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
-    quotation_text TEXT NOT NULL, -- The full text of the generated quotation
-    itinerary_used_id UUID REFERENCES public.itineraries(id) ON DELETE SET NULL, -- Optional: which itinerary was used
-    vendor_reply_used_id UUID REFERENCES public.vendor_replies(id) ON DELETE SET NULL -- Optional: which vendor reply was used
+    -- Stores the structured JSON data used for generating the quotation documents
+    structured_data_json JSONB, -- Changed from TEXT to JSONB for better structured data handling
+    -- Stores the path/key to the PDF file in Supabase Storage
+    pdf_storage_path TEXT NULL, -- Path in Supabase Storage; NULL if not saved or only JSON is stored
+    -- Stores the path/key to the DOCX file in Supabase Storage (optional)
+    docx_storage_path TEXT NULL, -- Path in Supabase Storage; NULL if not saved or only JSON is stored
+    itinerary_used_id UUID REFERENCES public.itineraries(id) ON DELETE SET NULL,
+    vendor_reply_used_id UUID REFERENCES public.vendor_replies(id) ON DELETE SET NULL
 );
 
 -- Optional: Index on enquiry_id for faster lookups
-CREATE INDEX idx_quotations_enquiry_id ON public.quotations(enquiry_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_enquiry_id ON public.quotations(enquiry_id);
 
-COMMENT ON TABLE public.quotations IS 'Stores final generated quotations for clients.';
+COMMENT ON TABLE public.quotations IS 'Stores final generated quotations, linking to files in Supabase Storage and including the source JSON data.';
 COMMENT ON COLUMN public.quotations.enquiry_id IS 'Foreign key linking to the parent enquiry.';
+COMMENT ON COLUMN public.quotations.structured_data_json IS 'The structured JSON data used to generate the quotation documents.';
+COMMENT ON COLUMN public.quotations.pdf_storage_path IS 'Path/key to the generated PDF file in Supabase Storage. NULL if not (yet) uploaded.';
+COMMENT ON COLUMN public.quotations.docx_storage_path IS 'Path/key to the generated DOCX file in Supabase Storage. NULL if not (yet) uploaded.';
 COMMENT ON COLUMN public.quotations.itinerary_used_id IS 'Foreign key to the specific itinerary version used for this quote.';
 COMMENT ON COLUMN public.quotations.vendor_reply_used_id IS 'Foreign key to the specific vendor reply version used for this quote.';
 
@@ -75,7 +83,7 @@ COMMENT ON COLUMN public.clients.enquiry_id IS 'Foreign key linking to the paren
 
 -- Enable RLS and create policies for all tables
 ALTER TABLE public.itineraries ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public anon access"
+CREATE POLICY "Public anon access for itineraries"
 ON public.itineraries
 FOR ALL
 TO anon
@@ -83,7 +91,7 @@ USING (true)
 WITH CHECK (true);
 
 ALTER TABLE public.vendor_replies ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public anon access"
+CREATE POLICY "Public anon access for vendor_replies"
 ON public.vendor_replies
 FOR ALL
 TO anon
@@ -91,7 +99,7 @@ USING (true)
 WITH CHECK (true);
 
 ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public anon access"
+CREATE POLICY "Public anon access for quotations"
 ON public.quotations
 FOR ALL
 TO anon
@@ -99,7 +107,7 @@ USING (true)
 WITH CHECK (true);
 
 ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY; 
-CREATE POLICY "Public anon access"
+CREATE POLICY "Public anon access for enquiries"
 ON public.enquiries
 FOR ALL
 TO anon
@@ -107,7 +115,7 @@ USING (true)
 WITH CHECK (true);
 
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public anon access"
+CREATE POLICY "Public anon access for clients"
 ON public.clients
 FOR ALL
 TO anon

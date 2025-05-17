@@ -145,13 +145,27 @@ def get_vendor_reply_by_enquiry_id(enquiry_id: str):
         return None, _format_error_message(e, f"Unexpected error fetching vendor reply for enquiry {enquiry_id}")
 
 
-def add_quotation(enquiry_id: str, quotation_text: str, itinerary_used_id: str = None, vendor_reply_used_id: str = None):
-    insert_data = { "enquiry_id": enquiry_id, "quotation_text": quotation_text }
-    if itinerary_used_id: 
+def add_quotation(
+    enquiry_id: str,
+    structured_data_json: dict,  # Changed from quotation_text (str) to structured_data_json (dict)
+    itinerary_used_id: str = None,
+    vendor_reply_used_id: str = None,
+    pdf_storage_path: str = None,  # New parameter for Supabase Storage path
+    docx_storage_path: str = None  # New parameter for Supabase Storage path
+):
+    insert_data = {
+        "enquiry_id": enquiry_id,
+        "structured_data_json": structured_data_json # Store the dictionary directly, Supabase handles JSONB
+    }
+    if itinerary_used_id:
         insert_data["itinerary_used_id"] = itinerary_used_id
-    if vendor_reply_used_id: 
+    if vendor_reply_used_id:
         insert_data["vendor_reply_used_id"] = vendor_reply_used_id
-        
+    if pdf_storage_path: # Will be None for now
+        insert_data["pdf_storage_path"] = pdf_storage_path
+    if docx_storage_path: # Will be None for now
+        insert_data["docx_storage_path"] = docx_storage_path
+
     try:
         response = supabase.table("quotations").insert(insert_data).execute()
         return response.data[0] if response and response.data else None, None
@@ -159,7 +173,6 @@ def add_quotation(enquiry_id: str, quotation_text: str, itinerary_used_id: str =
         return None, _format_error_message(e, "Error adding quotation")
     except Exception as e:
         return None, _format_error_message(e, "Unexpected error adding quotation")
-
 
 def get_quotation_by_enquiry_id(enquiry_id: str):
     try:
@@ -169,3 +182,13 @@ def get_quotation_by_enquiry_id(enquiry_id: str):
         return None, _format_error_message(e, f"Error fetching quotation for enquiry {enquiry_id}")
     except Exception as e:
         return None, _format_error_message(e, f"Unexpected error fetching quotation for enquiry {enquiry_id}")
+
+def get_client_by_enquiry_id(enquiry_id: str):
+    """Fetches client details for a given enquiry_id."""
+    try:
+        response = supabase.table("clients").select("*").eq("enquiry_id", enquiry_id).limit(1).maybe_single().execute()
+        return response.data if response else None, None
+    except (APIError, HTTPStatusError) as e:
+        return None, _format_error_message(e, f"Error fetching client for enquiry {enquiry_id}")
+    except Exception as e:
+        return None, _format_error_message(e, f"Unexpected error fetching client for enquiry {enquiry_id}")

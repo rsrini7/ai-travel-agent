@@ -74,11 +74,8 @@ class PDFQuotation(FPDF):
         self.ICON_PACKAGE = "📦" if self._font_supports("📦") else "[Pkg]"
         self.ICON_SPARKLES = "✨" if self._font_supports("✨") else "*"  # Fallback for sparkles
 
-    def _font_supports(self, char):
-        # Simple stub: always return False (or True if you want to always use icons)
-        # For robust implementation, check if the current font supports the character
-        # but FPDF does not provide a direct way, so fallback to False for now
-        return False
+    def _font_supports(self, char): # char argument is not used by this simple check
+        return self.font_family_available['regular'] # True if DejaVu regular was loaded
 
     def header_section_page1(self, data: Dict[str, Any]):
         banner_path = os.path.join("assets", "top_banner.png")
@@ -232,8 +229,8 @@ class PDFQuotation(FPDF):
         
         for item in exclusions: 
             self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
-        for item in standard_exclusions: 
-            self.multi_cell(0, 5, f"{self.ICON_ARROW_RIGHT} {str(item)}", new_x="LMARGIN", new_y="NEXT")
+        for item in standard_exclusions: # Changed Icon Here
+            self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
         
         self.ln(2)
         self.set_fill_color(*self.highlight_bg_color)
