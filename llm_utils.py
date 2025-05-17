@@ -364,16 +364,44 @@ def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str
     pdf_output_bytes=b"",
     ai_provider=provider
     )
+    
+    print(f"[Quotation Generation] Starting PDF generation with {provider}...")
+    
     try:
+        # Step 1: Fetch and parse data
+        print("[Quotation Generation] Fetching and parsing enquiry and vendor data...")
         final_state = quotation_generation_graph_pdf.invoke(initial_state)
+        
+        # Step 2: Generate PDF
+        print("[Quotation Generation] Generating PDF document...")
         pdf_bytes = final_state.get("pdf_output_bytes")
+        
         if not pdf_bytes: # Should be handled by generate_pdf_node, but as a safeguard
-            pdf = FPDF(); pdf.add_page(); pdf.set_font("Helvetica", "B", 12)
+            print("[Quotation Generation] Warning: No PDF bytes returned from graph")
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 12)
             pdf.cell(0, 10, "Error: PDF generation failed, no bytes returned from graph unexpectedly.")
             return pdf.output(dest='S')
+            
+        print("[Quotation Generation] PDF generation completed successfully")
         return pdf_bytes
+        
     except Exception as e:
-        print(f"Error running quotation graph ({provider}): {e}")
-        pdf = FPDF(); pdf.add_page(); pdf.set_font("Helvetica", "B", 12)
-        pdf.multi_cell(0,10, f"Critical error in quotation generation graph ({provider}): {e}")
+        print(f"[Quotation Generation] Error running quotation graph ({provider}): {e}")
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 12)
+        
+        # More detailed error message
+        pdf.multi_cell(0, 8, "Quotation Generation Failed", align='C')
+        pdf.ln(5)
+        pdf.multi_cell(0, 6, f"Error occurred while generating quotation with {provider}:")
+        pdf.ln(3)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 5, str(e))
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.multi_cell(0, 5, "Please try again or contact support if the issue persists.")
+        
         return pdf.output(dest='S')

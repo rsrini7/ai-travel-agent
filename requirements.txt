@@ -8,3 +8,5 @@ python-dotenv
 langchain-openai
 fpdf2
 pandas
+python-docx
+pdf2docx

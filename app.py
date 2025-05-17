@@ -44,7 +44,7 @@ if 'selected_ai_provider' not in st.session_state:
 tab1, tab2, tab3 = st.tabs([
     "📝 New Enquiry", 
     "🔍 Manage Enquiries & Itinerary", 
-    "✍️ Add Vendor Reply & Generate Quotation (PDF)" 
+    "✍️ Add Vendor Reply & Generate Quotation" 
 ])
 
 # --- AI Provider Selection (Global Sidebar) --- (no changes here)
@@ -222,7 +222,7 @@ with tab2: # No changes to Tab 2
 
 
 with tab3: 
-    st.header("3. Add Vendor Reply & Generate Quotation (PDF)") 
+    st.header("3. Add Vendor Reply & Generate Quotation") 
     # ... (Tab 3 setup, enquiry selection, vendor reply form remains the same as previous PDF version) ...
     enquiries_list_tab3, error_msg_enq_list_tab3 = get_enquiries()
     if error_msg_enq_list_tab3:
@@ -338,51 +338,88 @@ with tab3:
                                     st.error(f"Failed to save vendor reply. {error_msg_reply_add or 'Unknown error'}")
                 
                 st.markdown("---")
-                st.subheader(f"📄 AI Quotation Generation (PDF) (using {st.session_state.selected_ai_provider})")
-
+                st.subheader(f"📄 AI Quotation Generation (using {st.session_state.selected_ai_provider})")
+                
                 if not (st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info['text']):
-                    st.warning("A vendor reply is required to generate a quotation PDF. Please add one above.")
+                    st.warning("A vendor reply is required to generate quotations. Please add one above.")
                 
                 generate_quotation_disabled = not (st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info['text']) or not st.session_state.tab3_enquiry_details
                 
-                if st.button(f"Generate Quotation PDF with {st.session_state.selected_ai_provider}", key="gen_quotation_btn_tab3", disabled=generate_quotation_disabled):
-                    if st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info['text'] and st.session_state.tab3_enquiry_details:
-                        with st.spinner(f"Generating quotation PDF with {st.session_state.selected_ai_provider}... This may take moments."):
-                            pdf_bytes_output = run_quotation_generation_graph(
-                                st.session_state.tab3_enquiry_details,
-                                st.session_state.tab3_vendor_reply_info['text'],
-                                st.session_state.selected_ai_provider
-                            )
-                            print(f"[PDF DEBUG] Type of pdf_bytes_output: {type(pdf_bytes_output)}")
-                            print(f"[PDF DEBUG] Length of pdf_bytes_output: {len(pdf_bytes_output) if pdf_bytes_output else 'None'}")
-                            if pdf_bytes_output and len(pdf_bytes_output) > 1000:
-                                print("[PDF DEBUG] Assigning PDF bytes to session state.")
-                                st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
-                                st.session_state.show_quotation_success_tab3 = True
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"Generate Quotation PDF with {st.session_state.selected_ai_provider}",
+                                disabled=generate_quotation_disabled,
+                                key="generate_pdf_btn_tab3"):
+                        if st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info['text'] and st.session_state.tab3_enquiry_details:
+                            with st.spinner(f"Generating quotation PDF with {st.session_state.selected_ai_provider}... This may take moments."):
+                                pdf_bytes_output = run_quotation_generation_graph(
+                                    st.session_state.tab3_enquiry_details,
+                                    st.session_state.tab3_vendor_reply_info['text'],
+                                    st.session_state.selected_ai_provider
+                                )
+                                print(f"[PDF DEBUG] Type of pdf_bytes_output: {type(pdf_bytes_output)}")
+                                print(f"[PDF DEBUG] Length of pdf_bytes_output: {len(pdf_bytes_output) if pdf_bytes_output else 'None'}")
+                                if pdf_bytes_output and len(pdf_bytes_output) > 1000:
+                                    print("[PDF DEBUG] Assigning PDF bytes to session state.")
+                                    st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
+                                    st.session_state.show_quotation_success_tab3 = True
+                                else:
+                                    print(f"[PDF DEBUG] PDF bytes output is None or too small. Value: {pdf_bytes_output}")
+                                    st.session_state.show_quotation_success_tab3 = False
+                                    st.rerun()
+                    
+                            if st.session_state.get('show_quotation_success_tab3', False):
+                                st.success("Quotation PDF generated successfully!")
+                            
+                            if st.session_state.tab3_quotation_pdf_bytes:
+                                print(f"[PDF DEBUG] Download button will use PDF bytes of length: {len(st.session_state.tab3_quotation_pdf_bytes)}")
+                                st.download_button(
+                                    label="Download Quotation PDF",
+                                    data=st.session_state.tab3_quotation_pdf_bytes,
+                                    file_name=f"Quotation_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.pdf",
+                                    mime="application/pdf"
+                                )
                             else:
-                                print(f"[PDF DEBUG] PDF bytes output is None or too small. Value: {pdf_bytes_output}")
-                                st.session_state.show_quotation_success_tab3 = False
-                                st.rerun()
-                                st.error(f"Quotation PDF generation failed or produced minimal output. Check logs.")
-                                if pdf_bytes_output:
-                                    st.error("Attempting to display error output (if any):")
-                                    try:
-                                        st.text(pdf_bytes_output.decode('latin-1', errors='ignore'))
-                                    except:
-                                        st.text("Could not decode error output.")
+                                print("[PDF DEBUG] No PDF bytes found in session state.")
+                                st.error("Failed to generate PDF. Please check the logs for details.")
                 
-                if st.session_state.get('show_quotation_success_tab3', False):
-                    st.success("Quotation PDF generated successfully!")
-                
-                if st.session_state.tab3_quotation_pdf_bytes:
-                    print(f"[PDF DEBUG] Download button will use PDF bytes of length: {len(st.session_state.tab3_quotation_pdf_bytes)}")
-                    st.download_button(
-                        label="Download Quotation PDF",
-                        data=st.session_state.tab3_quotation_pdf_bytes,
-                        file_name=f"Quotation_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.pdf",
-                        mime="application/pdf"
-                    )
-
+                with col2:
+                    if st.button(f"Generate Quotation DOCX with {st.session_state.selected_ai_provider}",
+                                disabled=generate_quotation_disabled,
+                                key="generate_docx_btn_tab3"):
+                        if st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info['text'] and st.session_state.tab3_enquiry_details:
+                            with st.spinner(f"Generating quotation Docx with {st.session_state.selected_ai_provider}... This may take moments."):
+                                pdf_bytes_output = run_quotation_generation_graph(
+                                    st.session_state.tab3_enquiry_details,
+                                    st.session_state.tab3_vendor_reply_info['text'],
+                                    st.session_state.selected_ai_provider
+                                )
+                                print(f"[PDF DEBUG] Type of pdf_bytes_output: {type(pdf_bytes_output)}")
+                                print(f"[PDF DEBUG] Length of pdf_bytes_output: {len(pdf_bytes_output) if pdf_bytes_output else 'None'}")
+                                if pdf_bytes_output and len(pdf_bytes_output) > 1000:
+                                    from docx_utils import convert_pdf_bytes_to_docx_bytes
+                                    print("[PDF DEBUG] Assigning PDF bytes to session state. converting to docx")
+                                    st.session_state.tab3_quotation_docx_bytes = convert_pdf_bytes_to_docx_bytes(pdf_bytes_output)
+                                    st.session_state.show_quotation_success_tab3 = True
+                                else:
+                                    print(f"[PDF DEBUG] PDF bytes output is None or too small. convert to docx ignored. Value: {pdf_bytes_output}")
+                                    st.session_state.show_quotation_success_tab3 = False
+                                    st.rerun()
+                    
+                            if st.session_state.get('show_quotation_success_tab3', False):
+                                st.success("Quotation DOCX generated successfully!")
+                            
+                            if st.session_state.tab3_quotation_docx_bytes:
+                                print(f"[DOCX DEBUG] Download button will use DOCX bytes of length: {len(st.session_state.tab3_quotation_docx_bytes)}")
+                                st.download_button(
+                                    label="Download Quotation DOCX",
+                                    data=st.session_state.tab3_quotation_docx_bytes,
+                                    file_name=f"Quotation_{st.session_state.tab3_enquiry_details.get('destination','Enquiry').replace(' ','_')}_{active_enquiry_id_tab3[:6]}.docx",
+                                    mime="application/docx"
+                                )
+                            else:
+                                print("[DOCX DEBUG] No DOCX bytes found in session state.")
+                                st.error("Failed to generate DOCX. Please check the logs for details.")
             else: 
                  st.error(f"Could not load details for the selected enquiry (ID: {active_enquiry_id_tab3[:8]}...).")
         else: 
