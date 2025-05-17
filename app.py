@@ -174,6 +174,8 @@ with tab2:
                     st.caption("No AI suggestions generated yet for this enquiry.")
 
                 if st.button(f"Generate Places Suggestions with {st.session_state.selected_ai_provider}", key="gen_ai_suggestions_btn"):
+                    if 'show_ai_suggestion_success' not in st.session_state:
+                        st.session_state.show_ai_suggestion_success = False
                     with st.spinner(f"Generating AI suggestions with {st.session_state.selected_ai_provider}..."):
                         suggestions_text = generate_places_suggestion_llm(
                             enquiry_details, 
@@ -184,12 +186,15 @@ with tab2:
                             if new_suggestion_record:
                                 st.session_state.current_ai_suggestions = suggestions_text
                                 st.session_state.current_ai_suggestions_id = new_suggestion_record['id']
-                                st.success("AI Place suggestions generated and saved successfully!")
-                                st.rerun() 
+                                st.session_state.show_ai_suggestion_success = True
+                                st.rerun()
                             else:
                                 st.error(f"Failed to save AI suggestions: {error_msg_sugg_add or 'Unknown error'}")
                         else:
                             st.error(suggestions_text)
+                if st.session_state.get('show_ai_suggestion_success', False):
+                    st.success("AI Place suggestions generated and saved successfully!")
+                    st.session_state.show_ai_suggestion_success = False
                 
                 st.markdown("---")
                 st.subheader(f"📄 AI Quotation Generation (using {st.session_state.selected_ai_provider})")
