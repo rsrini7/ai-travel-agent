@@ -26,7 +26,6 @@ class QuotationGenerationState(TypedDict):
 
 # --- LangGraph Nodes ---
 def fetch_data_node(state: QuotationGenerationState):
-    # This node mainly passes data through, could be merged if state initialization is simpler
     return {
         "enquiry_details": state["enquiry_details"],
         "vendor_reply_text": state["vendor_reply_text"],
@@ -63,13 +62,10 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         num_days_int = int(enquiry.get("num_days", 0))
         num_nights = num_days_int - 1 if num_days_int > 0 else 0
 
-        # Base prompt template
         json_prompt_str = QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
         
-        # Provider-specific adjustments for JSON mode
         if provider == "OpenRouter" and ("gpt" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower() or \
                                          "claude-3" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower()):
-            # Use the ChatOpenAI instance with JSON mode enabled
             llm_for_json = get_llm_instance(provider) 
             if not hasattr(llm_for_json, 'model_kwargs') or llm_for_json.model_kwargs is None:
                 llm_for_json.model_kwargs = {}
@@ -77,11 +73,10 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
             prompt = ChatPromptTemplate.from_template(json_prompt_str)
             chain = prompt | llm_for_json | JsonOutputParser()
         elif provider == "Gemini":
-            # Gemini might need a slight prompt modification for reliable JSON
             updated_json_prompt_str = json_prompt_str.replace("```json", "Please provide your response strictly in the following JSON format, ensuring all strings are correctly escaped:\n```json")
             prompt = ChatPromptTemplate.from_template(updated_json_prompt_str)
-            chain = prompt | llm | StrOutputParser() # Gemini output parsed as string first
-        else: # Default for other OpenRouter models or fallback
+            chain = prompt | llm | StrOutputParser() 
+        else: 
             prompt = ChatPromptTemplate.from_template(json_prompt_str)
             chain = prompt | llm | StrOutputParser()
 
@@ -96,25 +91,45 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         })
 
         structured_data = {}
+        raw_llm_output_for_error = "" # Store the raw output in case of parsing error
+
         if isinstance(response_data, str):
+            raw_llm_output_for_error = response_data # Save the original string output
             try:
-                # Clean the string if it's wrapped in markdown code blocks
+                # --- START: ENHANCED JSON PARSING ---
                 cleaned_response = response_data.strip()
-                if cleaned_response.startswith("```json"):
-                    cleaned_response = cleaned_response[7:]
-                if cleaned_response.endswith("```"):
-                    cleaned_response = cleaned_response[:-3]
-                structured_data = json.loads(cleaned_response)
+                
+                # Attempt to find the start of the JSON content
+                json_start_index = cleaned_response.find('{')
+                if json_start_index == -1: # No opening brace found
+                    raise json.JSONDecodeError("No JSON object found in the response.", cleaned_response, 0)
+
+                # Attempt to find the end of the JSON content (matching last brace)
+                # This is a bit more complex due to nested objects.
+                # A simpler approach is to find the last '}'
+                json_end_index = cleaned_response.rfind('}')
+                if json_end_index == -1 or json_end_index < json_start_index: # No closing brace or it's before start
+                     raise json.JSONDecodeError("Incomplete JSON object in the response.", cleaned_response, 0)
+
+                # Extract the potential JSON string
+                potential_json_str = cleaned_response[json_start_index : json_end_index + 1]
+                
+                # Now try to parse this extracted string
+                structured_data = json.loads(potential_json_str)
+                # --- END: ENHANCED JSON PARSING ---
+
             except json.JSONDecodeError as e:
                 print(f"Failed to parse JSON from LLM string output: {e}")
-                print(f"LLM String Output was:\n{response_data}")
-                return {"structured_quotation_data": {"error": "Failed to parse JSON from LLM", "raw_output": response_data}}
-        elif isinstance(response_data, dict):
+                print(f"LLM String Output was:\n{raw_llm_output_for_error}") # Print the original raw output
+                return {"structured_quotation_data": {"error": "Failed to parse JSON from LLM", "raw_output": raw_llm_output_for_error}}
+        elif isinstance(response_data, dict): 
             structured_data = response_data
+            # If it's already a dict, store its string representation for "raw_output" if needed
+            raw_llm_output_for_error = json.dumps(response_data, indent=2)
         else:
-            return {"structured_quotation_data": {"error": "Unexpected LLM output type for JSON."}}
+            return {"structured_quotation_data": {"error": "Unexpected LLM output type for JSON.", "raw_output": str(response_data)}}
 
-        # Data sanitization (ensure list items are strings for PDF)
+        # Data sanitization
         for key_list in ["inclusions", "exclusions", "standard_exclusions_list", "important_notes"]:
             if key_list in structured_data and isinstance(structured_data[key_list], list):
                 structured_data[key_list] = [str(item) for item in structured_data[key_list]]
@@ -133,19 +148,24 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
 
     except Exception as e:
         print(f"Error structuring data for PDF with LLM ({provider}): {e}")
-        return {"structured_quotation_data": {"error": f"LLM error during JSON generation: {e}"}}
+        # Include raw output if available from the response_data variable if exception happened after LLM call
+        raw_output_on_general_exception = ""
+        if 'response_data' in locals() and response_data:
+             raw_output_on_general_exception = str(response_data)
+
+        return {"structured_quotation_data": {"error": f"LLM error during JSON generation: {e}", "raw_output": raw_output_on_general_exception}}
 
 def generate_pdf_node(state: QuotationGenerationState):
     structured_data = state.get("structured_quotation_data")
     if not structured_data or "error" in structured_data:
         error_message = structured_data.get("error", "Unknown error before PDF generation")
+        raw_output = structured_data.get("raw_output", "N/A") # Get raw_output if present
         print(f"Skipping PDF generation due to previous error: {error_message}")
-        # Create a simple error PDF
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Helvetica", "B", 12) # Use a standard font
-        pdf.multi_cell(0, 10, f"Error generating PDF: {error_message}\n\nLLM Raw Output (if any):\n{structured_data.get('raw_output', 'N/A')}")
-        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))} # Ensure bytes
+        pdf.set_font("Helvetica", "B", 12) 
+        pdf.multi_cell(0, 10, f"Error generating PDF: {error_message}\n\nLLM Raw Output:\n{raw_output}")
+        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))} 
     try:
         pdf_bytes = create_pdf_quotation_bytes(structured_data)
         return {"pdf_output_bytes": pdf_bytes}
@@ -155,7 +175,7 @@ def generate_pdf_node(state: QuotationGenerationState):
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 12)
         pdf.multi_cell(0, 10, f"Critical error during PDF file creation: {e}")
-        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))} # Ensure bytes
+        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))} 
 
 # --- LangGraph Workflow Definition ---
 workflow = StateGraph(QuotationGenerationState)
@@ -170,7 +190,6 @@ workflow.add_edge("parse_vendor_text", "structure_data_for_pdf")
 workflow.add_edge("structure_data_for_pdf", "generate_pdf_document")
 workflow.add_edge("generate_pdf_document", END)
 
-# Compile the graph once when the module is loaded
 quotation_generation_graph_compiled = workflow.compile()
 
 # --- LangGraph Runner Function ---
@@ -185,40 +204,42 @@ def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str
     )
     
     print(f"[Quotation Generation Graph] Starting PDF generation with {provider}...")
-    error_pdf_message = None
+    final_state = {} # Initialize final_state
     
     try:
         final_state = quotation_generation_graph_compiled.invoke(initial_state)
         pdf_bytes = final_state.get("pdf_output_bytes")
-        structured_data = final_state.get("structured_quotation_data")
+        structured_data = final_state.get("structured_quotation_data", {}) # Default to empty dict
 
-        if not pdf_bytes: # Should ideally not happen if generate_pdf_node always returns bytes
+        error_pdf_message = None
+        if not pdf_bytes: 
             error_pdf_message = "Error: PDF generation failed, no bytes returned from graph unexpectedly."
-        elif structured_data and "error" in structured_data:
+        elif "error" in structured_data: # Check if structured_data itself indicates an error
              error_pdf_message = f"Error in structured data: {structured_data.get('error')}"
-             # pdf_bytes might be an error PDF from generate_pdf_node already
         
         if error_pdf_message:
             print(f"[Quotation Generation Graph] Warning: {error_pdf_message}")
-            # Ensure an error PDF is returned if not already one
+            raw_output = structured_data.get("raw_output", "N/A")
+            # Ensure an error PDF is returned if not already one from generate_pdf_node
             if not (b"Error generating PDF" in pdf_bytes or b"Critical error during PDF" in pdf_bytes):
                 pdf = FPDF()
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 12)
-                pdf.multi_cell(0, 10, error_pdf_message)
+                pdf.multi_cell(0, 10, f"{error_pdf_message}\n\nLLM Raw Output:\n{raw_output}")
                 pdf_bytes = bytes(pdf.output(dest='S'))
-            return pdf_bytes, structured_data or {"error": error_pdf_message, "raw_output": structured_data.get("raw_output")}
+            return pdf_bytes, structured_data
 
         print("[Quotation Generation Graph] PDF generation process completed.")
         return pdf_bytes, structured_data
         
     except Exception as e:
         print(f"[Quotation Generation Graph] Critical error running quotation graph ({provider}): {e}")
+        raw_output_from_final_state = final_state.get("structured_quotation_data", {}).get("raw_output", "N/A")
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 12)
         pdf.multi_cell(0, 8, "Quotation Generation Failed Due to System Error", align='C')
         pdf.ln(5)
         pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 5, f"Details: {str(e)}")
-        return bytes(pdf.output(dest='S')), {"error": f"Graph execution system error: {str(e)}"}
+        pdf.multi_cell(0, 5, f"Details: {str(e)}\n\nLLM Raw Output (if available from last successful node):\n{raw_output_from_final_state}")
+        return bytes(pdf.output(dest='S')), {"error": f"Graph execution system error: {str(e)}", "raw_output": raw_output_from_final_state}

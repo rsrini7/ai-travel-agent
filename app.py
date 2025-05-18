@@ -1,11 +1,7 @@
-import os
 from dotenv import load_dotenv
 
 # Load .env file at the very beginning
-if load_dotenv():
-    print("APP.PY (MAIN): .env file loaded successfully.")
-else:
-    print("APP.PY (MAIN): .env file not found.")
+load_dotenv()
 
 import streamlit as st
 

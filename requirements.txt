@@ -6,6 +6,7 @@ langchain-community
 langgraph
 python-dotenv
 langchain-openai
+langchain-groq
 fpdf2
 pandas
 python-docx
