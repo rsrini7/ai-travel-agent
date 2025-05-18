@@ -1,10 +1,11 @@
+# src/ui/tabs/tab2_manage_itinerary.py
 import streamlit as st
 from src.utils.supabase_utils import (
     get_enquiry_by_id, add_itinerary, get_itinerary_by_enquiry_id
 )
 from src.core.itinerary_generator import generate_places_suggestion_llm
 from src.ui.ui_helpers import handle_enquiry_selection
-from src.utils.constants import ( # Import relevant session keys
+from src.utils.constants import ( 
     SESSION_KEY_TAB2_SELECTED_ENQUIRY_ID,
     SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS,
     SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID,
@@ -13,7 +14,6 @@ from src.utils.constants import ( # Import relevant session keys
 )
 
 def _reset_tab2_states():
-    """Callback to reset tab2 specific states when enquiry selection changes."""
     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS] = None
     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID] = None
     st.session_state[SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG] = None
@@ -25,7 +25,6 @@ def render_tab2():
         st.success(st.session_state[SESSION_KEY_OPERATION_SUCCESS_MESSAGE])
         st.session_state[SESSION_KEY_OPERATION_SUCCESS_MESSAGE] = None
 
-    # Use the new helper for enquiry selection
     active_enquiry_id_tab2, _ = handle_enquiry_selection(
         st_object=st,
         session_state_key_for_selected_id=SESSION_KEY_TAB2_SELECTED_ENQUIRY_ID,
@@ -38,14 +37,12 @@ def render_tab2():
         enquiry_details_tab2, error_msg_details_tab2 = get_enquiry_by_id(active_enquiry_id_tab2)
 
         if enquiry_details_tab2:
-            # Load itinerary if not loaded for current enquiry or if flag isn't set
             if st.session_state.get(SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG) != active_enquiry_id_tab2:
                 ai_suggestions_data_tab2, _ = get_itinerary_by_enquiry_id(active_enquiry_id_tab2)
                 if ai_suggestions_data_tab2:
                     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS] = ai_suggestions_data_tab2['itinerary_text']
                     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID] = ai_suggestions_data_tab2['id']
                 else:
-                    # _reset_tab2_states would have cleared these, but good to be explicit if needed
                     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS] = None
                     st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID] = None
                 st.session_state[SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG] = active_enquiry_id_tab2
@@ -71,27 +68,40 @@ def render_tab2():
 
             if st.button(f"Generate Places Suggestions with {st.session_state.selected_ai_provider}", key="gen_ai_suggestions_btn_tab2"):
                 with st.spinner(f"Generating AI suggestions with {st.session_state.selected_ai_provider}..."):
-                    suggestions_text = generate_places_suggestion_llm(
+                    suggestions_text, error_info = generate_places_suggestion_llm(
                         enquiry_details_tab2,
                         provider=st.session_state.selected_ai_provider
                     )
-                    if "Error:" not in suggestions_text and "Critical error" not in suggestions_text and "OpenRouter Model Error:" not in suggestions_text:
+                    if suggestions_text and not error_info:
                         new_suggestion_record, error_msg_sugg_add = add_itinerary(active_enquiry_id_tab2, suggestions_text)
                         if new_suggestion_record:
                             st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS] = suggestions_text
                             st.session_state[SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID] = new_suggestion_record['id']
-                            st.session_state[SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG] = active_enquiry_id_tab2 # Mark as loaded
-                            st.session_state[SESSION_KEY_OPERATION_SUCCESS_MESSAGE] = "AI Place suggestions generated and saved successfully!"
+                            st.session_state[SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG] = active_enquiry_id_tab2 
+                            st.session_state[SESSION_KEY_OPERATION_SUCCESS_MESSAGE] = "AI Place suggestions generated and saved!"
                             st.rerun()
                         else:
-                            st.error(f"Failed to save AI suggestions: {error_msg_sugg_add or 'Unknown error'}")
-                    else:
-                        st.error(suggestions_text)
+                            st.error(f"Failed to save AI suggestions to database: {error_msg_sugg_add or 'Unknown error'}")
+                    else: 
+                        err_msg_display = "Could not generate place suggestions."
+                        if error_info:
+                            err_msg_display = error_info.get("message", err_msg_display)
+                            st.error(f"AI Error: {err_msg_display}")
+                            
+                            details_to_show = error_info.get("details")
+                            raw_response_to_show = error_info.get("raw_response")
+
+                            if details_to_show or raw_response_to_show :
+                                with st.expander("Error Details from AI Provider"):
+                                    if error_info.get("type"): st.caption(f"Error Type: {error_info.get('type')}")
+                                    if error_info.get("status_code"): st.caption(f"Status Code: {error_info.get('status_code')}")
+                                    if details_to_show: st.markdown(f"**Details:**\n```\n{str(details_to_show)}\n```")
+                                    if raw_response_to_show: st.markdown(f"**Raw Response:**\n```\n{str(raw_response_to_show)[:1000]}\n```") # Truncate long raw responses
+                        else: 
+                            st.error(err_msg_display) # Fallback if error_info is somehow None
         elif error_msg_details_tab2:
             st.error(f"Could not load selected enquiry details: {error_msg_details_tab2}")
         else:
             st.warning("Selected enquiry details could not be loaded or enquiry not found.")
     else:
-        # This message is now handled by handle_enquiry_selection if enquiries_list is empty
-        # st.info("Select an enquiry to see details and generate itinerary.")
-        pass
+        pass # Message handled by handle_enquiry_selection

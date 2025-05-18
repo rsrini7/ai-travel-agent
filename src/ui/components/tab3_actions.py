@@ -176,10 +176,9 @@ def _get_or_generate_quotation_graph_data(current_graph_cache_key: str) -> tuple
     if st.session_state.tab3_cached_graph_output and st.session_state.tab3_cache_key == current_graph_cache_key:
         st.info("Using cached data for quotation generation.")
         pdf_bytes, structured_data = st.session_state.tab3_cached_graph_output
-        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes # Ensure it's in session for download
+        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes 
         return pdf_bytes, structured_data, False 
 
-    # Prepare data for graph
     itinerary_text_for_graph = st.session_state.tab3_itinerary_info.get('text', "Itinerary suggestions not available.")
     current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
     current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
@@ -193,47 +192,52 @@ def _get_or_generate_quotation_graph_data(current_graph_cache_key: str) -> tuple
             provider_for_generation
         )
     
-    # Store whatever PDF bytes came back, even if it's an error PDF
     if pdf_bytes_output:
         st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
 
-    is_graph_error = (
-        not pdf_bytes_output or
-        not structured_data_dict or 
-        structured_data_dict.get("error") or
-        (b"Error generating PDF" in pdf_bytes_output) or 
-        (b"Quotation Generation Failed" in pdf_bytes_output)
-    )
+    # Check if the graph itself or the data structuring reported an error
+    # structured_data_dict should always be a dict, potentially with an "error" key
+    is_data_error = structured_data_dict and structured_data_dict.get("error")
+    
+    # A "valid" PDF might still be an error PDF if is_data_error is true.
+    # Critical error means either no PDF, or data itself has an error flag.
+    has_critical_error = not pdf_bytes_output or is_data_error
 
-    if not is_graph_error:
+    if not has_critical_error:
         st.session_state.tab3_cached_graph_output = (pdf_bytes_output, structured_data_dict)
         st.session_state.tab3_cache_key = current_graph_cache_key
         st.caption("Quotation data generated and cached.")
         return pdf_bytes_output, structured_data_dict, False
-    else:
+    else: # Some error occurred
         st.session_state.tab3_cached_graph_output = None
         st.session_state.tab3_cache_key = None
         
-        error_message = "Unknown graph error during data generation."
-        raw_output_preview = "N/A"
+        # Prepare error display
+        error_message_display = "Quotation data generation failed."
+        error_details_display = ""
+        error_raw_output_display = ""
+        error_type_display = "UnknownError"
 
-        if structured_data_dict and structured_data_dict.get("error"):
-            error_message = structured_data_dict.get("error")
+        if structured_data_dict: # Error info should be in structured_data_dict
+            error_message_display = structured_data_dict.get("error", error_message_display)
+            error_details_display = str(structured_data_dict.get("details", ""))
+            error_raw_output_display = str(structured_data_dict.get("raw_output", ""))
+            error_type_display = str(structured_data_dict.get("type", "UnknownErrorInGraph"))
         elif not pdf_bytes_output:
-            error_message = "Graph did not return PDF bytes."
-        elif not structured_data_dict:
-             error_message = "Graph did not return structured data."
-        elif b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output:
-            error_message = "Generated PDF indicates an error in content generation."
+            error_message_display = "Critical error: PDF generation process returned no output."
+            error_type_display = "NoPdfBytes"
 
-        if structured_data_dict and structured_data_dict.get('raw_output'):
-            raw_output_preview = structured_data_dict['raw_output']
-
-        st.error(f"Error from quotation graph: {error_message}")
-        if raw_output_preview != "N/A":
-            st.expander("Raw LLM Output Preview").text(raw_output_preview[:500] + "..." if len(raw_output_preview) > 500 else raw_output_preview)
+        st.error(f"AI Quotation Error ({error_type_display}): {error_message_display}")
         
-        return pdf_bytes_output, structured_data_dict, True # True means critical error
+        if error_details_display or error_raw_output_display:
+            with st.expander("Error Details & Technical Information"):
+                if error_details_display:
+                    st.markdown(f"**Details:**\n```\n{error_details_display}\n```")
+                if error_raw_output_display:
+                    st.markdown(f"**Raw Output/Context (truncated):**\n```\n{error_raw_output_display[:1000]}\n```")
+        
+        # pdf_bytes_output here might be an error PDF generated by the graph, or None
+        return pdf_bytes_output, structured_data_dict, True
 
 # --- Main PDF/DOCX Generation Triggers ---
 def handle_pdf_generation(active_enquiry_id_tab3: str, current_graph_cache_key: str):
