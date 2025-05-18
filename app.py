@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+# Load .env file at the very beginning
 if load_dotenv():
     print("APP.PY (MAIN): .env file loaded successfully.")
 else:
@@ -13,21 +14,29 @@ from tab1_new_enquiry import render_tab1
 from tab2_manage_itinerary import render_tab2
 from tab3_vendor_quotation import render_tab3
 
+# Import sidebar rendering function
+from sidebar import render_sidebar # NEW IMPORT
+
 # --- CONFIGURATION ---
-# This constant can be imported by other modules if needed, e.g., from app import QUOTATIONS_BUCKET_NAME
 QUOTATIONS_BUCKET_NAME = "quotations"
 
 st.set_page_config(layout="wide")
 st.title("🤖 AI-Powered Travel Automation MVP")
 
-# Initialize session state variables - centralized here
+# --- Initialize session state variables - centralized here ---
+# This needs to happen before the sidebar is rendered if the sidebar depends on them.
+# Global AI Provider (initialize before sidebar render)
+if 'selected_ai_provider' not in st.session_state:
+    st.session_state.selected_ai_provider = "OpenRouter" # Default
+
+# Tab 1 & 2 shared states
 if 'selected_enquiry_id' not in st.session_state:
     st.session_state.selected_enquiry_id = None
 if 'current_ai_suggestions' not in st.session_state:
     st.session_state.current_ai_suggestions = None
 if 'current_ai_suggestions_id' not in st.session_state:
     st.session_state.current_ai_suggestions_id = None
-if 'itinerary_loaded_for_tab2' not in st.session_state: # Specific to tab2 logic
+if 'itinerary_loaded_for_tab2' not in st.session_state:
     st.session_state.itinerary_loaded_for_tab2 = None
 
 # Tab 3 specific states
@@ -59,32 +68,13 @@ if 'tab3_quotation_docx_bytes' not in st.session_state:
 # Success/message flags
 if 'show_quotation_success_tab3' not in st.session_state:
     st.session_state.show_quotation_success_tab3 = False
-if 'vendor_reply_saved_success_message' not in st.session_state: # Used by Tab2 and Tab3
+if 'vendor_reply_saved_success_message' not in st.session_state:
     st.session_state.vendor_reply_saved_success_message = None
 
-# Global AI Provider
-if 'selected_ai_provider' not in st.session_state:
-    st.session_state.selected_ai_provider = "OpenRouter" # Default
 
-# --- AI Provider Selection (Global Sidebar) ---
-st.sidebar.subheader("⚙️ AI Configuration")
-ai_provider_options = ["Gemini", "OpenRouter"]
-current_provider_index = ai_provider_options.index(st.session_state.selected_ai_provider) if st.session_state.selected_ai_provider in ai_provider_options else 0
-selected_provider = st.sidebar.selectbox(
-    "Select AI Provider:",
-    options=ai_provider_options,
-    index=current_provider_index,
-    key="ai_provider_selector_sidebar"
-)
-if selected_provider != st.session_state.selected_ai_provider:
-    st.session_state.selected_ai_provider = selected_provider
-    st.rerun() # Rerun to ensure all parts of the app use the new provider
-
-st.sidebar.caption(f"Using: {st.session_state.selected_ai_provider}")
-if st.session_state.selected_ai_provider == "OpenRouter":
-    openrouter_model = os.getenv("OPENROUTER_DEFAULT_MODEL", "google/gemini-flash-1.5")
-    st.sidebar.caption(f"OpenRouter Model: {openrouter_model}")
-
+# --- Render Sidebar ---
+# The render_sidebar function will manage the 'selected_ai_provider' session state.
+render_sidebar() # CALL THE SIDEBAR FUNCTION HERE
 
 # --- Tab Definitions ---
 tab1, tab2, tab3 = st.tabs([
@@ -100,7 +90,4 @@ with tab2:
     render_tab2()
 
 with tab3:
-    # Pass QUOTATIONS_BUCKET_NAME if tab3_vendor_quotation needs it directly
-    # However, supabase_utils.py can import it or it can be passed deeper if preferred.
-    # For simplicity, render_tab3 can import it from app (main) if needed.
     render_tab3(QUOTATIONS_BUCKET_NAME_param=QUOTATIONS_BUCKET_NAME)
