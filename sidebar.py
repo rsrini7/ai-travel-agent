@@ -16,7 +16,8 @@ PROVIDER_MODEL_OPTIONS = {
         "llama3-70b-8192",
         "meta-llama/llama-4-scout-17b-16e-instruct",
         "deepseek-r1-distill-llama-70b",
-        "mistral-saba-24b"
+        "mistral-saba-24b",
+        "qwen-qwq-32b"
     ]
 }
 
