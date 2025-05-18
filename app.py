@@ -11,7 +11,7 @@ from tab2_manage_itinerary import render_tab2
 from tab3_vendor_quotation import render_tab3
 
 # Import sidebar rendering function
-from sidebar import render_sidebar # NEW IMPORT
+from sidebar import render_sidebar
 
 # --- CONFIGURATION ---
 QUOTATIONS_BUCKET_NAME = "quotations"
@@ -20,11 +20,9 @@ st.set_page_config(layout="wide")
 st.title("🤖 AI-Powered Travel Automation MVP")
 
 # --- Initialize session state variables - centralized here ---
-# This needs to happen before the sidebar is rendered if the sidebar depends on them.
-# Global AI Provider (initialize before sidebar render)
 if 'selected_ai_provider' not in st.session_state:
     st.session_state.selected_ai_provider = "OpenRouter" # Default
-if 'selected_model_for_provider' not in st.session_state: # Added from sidebar.py logic
+if 'selected_model_for_provider' not in st.session_state:
     st.session_state.selected_model_for_provider = None
 
 # Tab 1 & 2 shared states
@@ -64,21 +62,20 @@ if 'tab3_quotation_docx_bytes' not in st.session_state:
     st.session_state.tab3_quotation_docx_bytes = None
 
 # Success/message flags
-if 'show_quotation_success_tab3' not in st.session_state:
+if 'show_quotation_success_tab3' not in st.session_state: # This seems specific to tab3 quotation, might keep as is or rename if it's more general
     st.session_state.show_quotation_success_tab3 = False
-if 'vendor_reply_saved_success_message' not in st.session_state: # Generic success message flag
-    st.session_state.vendor_reply_saved_success_message = None
+if 'operation_success_message' not in st.session_state: # RENAMED
+    st.session_state.operation_success_message = None
 
 # Tab 3 Caching for Quotation Graph Output
 if 'tab3_cached_graph_output' not in st.session_state:
-    st.session_state.tab3_cached_graph_output = None # Will store (pdf_bytes, structured_data_dict)
+    st.session_state.tab3_cached_graph_output = None
 if 'tab3_cache_key' not in st.session_state:
-    st.session_state.tab3_cache_key = None # Key used to generate the cached output
+    st.session_state.tab3_cache_key = None
 
 
 # --- Render Sidebar ---
-# The render_sidebar function will manage the 'selected_ai_provider' session state.
-render_sidebar() # CALL THE SIDEBAR FUNCTION HERE
+render_sidebar()
 
 # --- Tab Definitions ---
 tab1, tab2, tab3 = st.tabs([

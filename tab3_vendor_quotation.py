@@ -2,40 +2,35 @@ import streamlit as st
 from supabase_utils import (
     get_enquiries, get_enquiry_by_id, get_client_by_enquiry_id,
     add_vendor_reply, get_vendor_reply_by_enquiry_id,
-    get_itinerary_by_enquiry_id, # Needed to fetch latest itinerary for quotation
+    get_itinerary_by_enquiry_id,
     add_quotation, update_quotation_storage_path, get_quotation_by_enquiry_id,
     upload_file_to_storage, get_public_url, create_signed_url
 )
 from quotation_graph_builder import run_quotation_generation_graph
 from docx_utils import convert_pdf_bytes_to_docx_bytes
-import uuid # For unique filenames
-from datetime import datetime # For timestamp in filenames
-import hashlib # For generating cache key
+import uuid
+from datetime import datetime
+import hashlib
 
-# Helper function to generate a cache key
 def _generate_graph_cache_key(enquiry_id: str, client_name: str, vendor_reply_text: str, ai_itinerary_text: str, llm_provider: str, llm_model: str | None) -> str:
-    """Generates a unique key for caching quotation graph inputs."""
     key_string = f"{enquiry_id}-{client_name}-{vendor_reply_text}-{ai_itinerary_text}-{llm_provider}-{llm_model or 'N/A'}"
     return hashlib.md5(key_string.encode('utf-8')).hexdigest()
 
 def _reset_tab3_cache_and_outputs():
-    """Resets cache and locally generated file bytes for Tab 3."""
     st.session_state.tab3_cached_graph_output = None
     st.session_state.tab3_cache_key = None
     st.session_state.tab3_quotation_pdf_bytes = None
     st.session_state.tab3_quotation_docx_bytes = None
-    # Do not reset stored paths (tab3_current_pdf_storage_path, tab3_current_docx_storage_path) here
-    # as they represent what's in the DB for the *latest* quotation record.
-    # They are reset specifically when a new generation starts for that file type.
 
 def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
     QUOTATIONS_BUCKET_NAME = QUOTATIONS_BUCKET_NAME_param
 
     st.header("3. Add Vendor Reply & Generate Quotation")
 
-    if st.session_state.get('vendor_reply_saved_success_message'):
-        st.success(st.session_state.vendor_reply_saved_success_message)
-        st.session_state.vendor_reply_saved_success_message = None
+    # RENAMED: Display one-time messages if set
+    if st.session_state.get('operation_success_message'):
+        st.success(st.session_state.operation_success_message)
+        st.session_state.operation_success_message = None # Clear after displaying
 
     enquiries_list_tab3, error_msg_enq_list_tab3 = get_enquiries()
     if error_msg_enq_list_tab3:
@@ -45,19 +40,18 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
     if not enquiries_list_tab3:
         st.info("No enquiries available. Submit one in 'New Enquiry' tab.")
         st.session_state.selected_enquiry_id_tab3 = None
-        _reset_tab3_cache_and_outputs() # Reset cache if no enquiries
+        _reset_tab3_cache_and_outputs()
     else:
         enquiry_options_tab3 = {f"{e['id'][:8]}... - {e['destination']}": e['id'] for e in enquiries_list_tab3}
 
         if st.session_state.selected_enquiry_id_tab3 not in enquiry_options_tab3.values():
             st.session_state.selected_enquiry_id_tab3 = list(enquiry_options_tab3.values())[0] if enquiry_options_tab3 else None
             if st.session_state.selected_enquiry_id_tab3:
-                st.session_state.tab3_enquiry_details = None # Force reload
+                st.session_state.tab3_enquiry_details = None
                 _reset_tab3_cache_and_outputs()
-                st.session_state.tab3_current_quotation_db_id = None # Reset related quotation info
+                st.session_state.tab3_current_quotation_db_id = None
                 st.session_state.tab3_current_pdf_storage_path = None
                 st.session_state.tab3_current_docx_storage_path = None
-
 
         current_selection_index_tab3 = 0
         if st.session_state.selected_enquiry_id_tab3 and enquiry_options_tab3:
@@ -66,7 +60,7 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
             except ValueError:
                 st.session_state.selected_enquiry_id_tab3 = list(enquiry_options_tab3.values())[0]
                 current_selection_index_tab3 = 0
-                st.session_state.tab3_enquiry_details = None # Force reload
+                st.session_state.tab3_enquiry_details = None
                 _reset_tab3_cache_and_outputs()
                 st.session_state.tab3_current_quotation_db_id = None
                 st.session_state.tab3_current_pdf_storage_path = None
@@ -86,10 +80,10 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
         if st.session_state.selected_enquiry_id_tab3 != prev_selected_enquiry_id_tab3:
             st.session_state.tab3_enquiry_details = None
             _reset_tab3_cache_and_outputs()
-            st.session_state.tab3_current_quotation_db_id = None # Also reset related quotation info
+            st.session_state.tab3_current_quotation_db_id = None
             st.session_state.tab3_current_pdf_storage_path = None
             st.session_state.tab3_current_docx_storage_path = None
-            st.session_state.show_quotation_success_tab3 = False # Reset success message display
+            st.session_state.show_quotation_success_tab3 = False
             st.rerun()
 
         if st.session_state.selected_enquiry_id_tab3:
@@ -114,20 +108,18 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                     st.session_state.tab3_current_quotation_db_id = None
                     st.session_state.tab3_current_pdf_storage_path = None
                     st.session_state.tab3_current_docx_storage_path = None
-                _reset_tab3_cache_and_outputs() # Reset cache when enquiry details are freshly loaded
+                _reset_tab3_cache_and_outputs()
 
             itinerary_data_tab3, _ = get_itinerary_by_enquiry_id(active_enquiry_id_tab3)
             current_itinerary_text = itinerary_data_tab3['itinerary_text'] if itinerary_data_tab3 else "No AI-generated itinerary/suggestions available. Please generate in Tab 2."
-            # Check if itinerary text has changed since last load for this enquiry to invalidate cache
             if st.session_state.tab3_itinerary_info and st.session_state.tab3_itinerary_info.get('text') != current_itinerary_text:
                 _reset_tab3_cache_and_outputs()
-
             st.session_state.tab3_itinerary_info = {'text': current_itinerary_text, 'id': itinerary_data_tab3['id'] if itinerary_data_tab3 else None}
-
 
             if st.session_state.tab3_enquiry_details:
                 st.subheader(f"Working with Enquiry for {st.session_state.tab3_client_name}: {st.session_state.tab3_enquiry_details['destination']} (ID: {active_enquiry_id_tab3[:8]}...)")
-                # Display enquiry details and itinerary expander (code omitted for brevity, same as before)
+                # Display enquiry details... (same as before)
+                # Display itinerary expander... (same as before)
                 itinerary_display_text_tab3 = st.session_state.tab3_itinerary_info.get('text', "No itinerary information.")
                 if "No AI-generated itinerary/suggestions available" not in itinerary_display_text_tab3:
                     with st.expander("View AI Generated Itinerary/Suggestions (from Tab 2)", expanded=False):
@@ -135,11 +127,11 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                 else:
                     st.caption(itinerary_display_text_tab3)
 
+
                 st.markdown("---")
                 st.subheader("✍️ Add/View Vendor Reply")
                 current_vendor_reply_text_for_form = st.session_state.tab3_vendor_reply_info.get('text', "") if st.session_state.tab3_vendor_reply_info else ""
                 
-                # Vendor reply form (code omitted for brevity, with one change)
                 with st.form(key=f"vendor_reply_form_tab3_{active_enquiry_id_tab3}"):
                     vendor_reply_text_input = st.text_area("Vendor Reply Text (Pricing, Inclusions, etc.)", value=current_vendor_reply_text_for_form, height=200, key=f"new_vendor_reply_text_tab3_{active_enquiry_id_tab3}")
                     submitted_vendor_reply = st.form_submit_button("Submit/Update Vendor Reply")
@@ -150,9 +142,10 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                             with st.spinner("Saving vendor reply..."):
                                 reply_data, error_msg_reply_add = add_vendor_reply(active_enquiry_id_tab3, vendor_reply_text_input)
                                 if reply_data:
-                                    st.session_state.vendor_reply_saved_success_message = f"Vendor reply saved for enquiry ID: {active_enquiry_id_tab3[:8]}..."
+                                    # RENAMED: Set the success message
+                                    st.session_state.operation_success_message = f"Vendor reply saved for enquiry ID: {active_enquiry_id_tab3[:8]}..."
                                     st.session_state.tab3_vendor_reply_info = {'text': reply_data['reply_text'], 'id': reply_data['id']}
-                                    _reset_tab3_cache_and_outputs() # Crucial: Reset cache on vendor reply update
+                                    _reset_tab3_cache_and_outputs()
                                     st.session_state.show_quotation_success_tab3 = False
                                     st.rerun()
                                 else: st.error(f"Failed to save vendor reply. {error_msg_reply_add or 'Unknown error'}")
@@ -177,8 +170,8 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                 col1_gen, col2_gen = st.columns(2)
                 with col1_gen:
                     if st.button(f"Generate Quotation PDF", disabled=generate_quotation_disabled, key="generate_pdf_btn_tab3"):
-                        st.session_state.tab3_quotation_pdf_bytes = None # Clear local download bytes
-                        st.session_state.tab3_current_pdf_storage_path = None # Clear stored path for new generation
+                        st.session_state.tab3_quotation_pdf_bytes = None
+                        st.session_state.tab3_current_pdf_storage_path = None
                         st.session_state.show_quotation_success_tab3 = False
                         
                         pdf_bytes_output, structured_data_dict = None, None
@@ -202,14 +195,13 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                                     st.session_state.tab3_cache_key = current_graph_cache_key
                                     st.caption("Quotation data generated and cached.")
                                 else:
-                                    _reset_tab3_cache_and_outputs() # Clear cache on error
+                                    _reset_tab3_cache_and_outputs()
 
                         if structured_data_dict and not structured_data_dict.get("error"):
                             is_error_pdf_content = b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output
                             if pdf_bytes_output and not is_error_pdf_content and len(pdf_bytes_output) > 1000:
                                 st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
                                 pdf_path_for_db = None
-                                # ... (rest of PDF upload and DB save logic, same as before) ...
                                 with st.spinner("Uploading PDF to cloud storage..."):
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                     fn = f"{active_enquiry_id_tab3}/quotation_PDF_{timestamp}_{uuid.uuid4().hex[:6]}.pdf"
@@ -229,7 +221,8 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                                     if q_error: st.error(f"Failed to save PDF quotation data: {q_error}")
                                     else:
                                         st.session_state.tab3_current_quotation_db_id = q_data['id']
-                                        st.session_state.vendor_reply_saved_success_message = "Quotation PDF generated, uploaded, and data saved!"
+                                        # RENAMED: Set the success message
+                                        st.session_state.operation_success_message = "Quotation PDF generated, uploaded, and data saved!"
                                         st.session_state.show_quotation_success_tab3 = True
                                         st.rerun()
                             else: 
@@ -278,7 +271,6 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                                 if docx_bytes_output:
                                     st.session_state.tab3_quotation_docx_bytes = docx_bytes_output
                                     docx_path_for_db = None
-                                    # ... (rest of DOCX upload and DB save/update logic, same as before) ...
                                     with st.spinner("Uploading DOCX to cloud storage..."):
                                         ts_docx = datetime.now().strftime("%Y%m%d_%H%M%S")
                                         fn_docx = f"{active_enquiry_id_tab3}/quotation_DOCX_{ts_docx}_{uuid.uuid4().hex[:6]}.docx"
@@ -292,7 +284,8 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                                             _, upd_err = update_quotation_storage_path(st.session_state.tab3_current_quotation_db_id, 'docx_storage_path', docx_path_for_db)
                                             if upd_err: st.error(f"Failed to update DOCX path in DB: {upd_err}")
                                             else: 
-                                                st.session_state.vendor_reply_saved_success_message = "DOCX generated, uploaded, and DB record updated!"
+                                                # RENAMED: Set the success message
+                                                st.session_state.operation_success_message = "DOCX generated, uploaded, and DB record updated!"
                                                 st.rerun()
                                         else: 
                                             q_data_dx, q_err_dx = add_quotation(
@@ -305,7 +298,8 @@ def render_tab3(QUOTATIONS_BUCKET_NAME_param: str):
                                             if q_err_dx: st.error(f"Failed to save DOCX quotation data: {q_err_dx}")
                                             else:
                                                 st.session_state.tab3_current_quotation_db_id = q_data_dx['id']
-                                                st.session_state.vendor_reply_saved_success_message = "DOCX generated, uploaded, and new data record saved!"
+                                                # RENAMED: Set the success message
+                                                st.session_state.operation_success_message = "DOCX generated, uploaded, and new data record saved!"
                                                 st.rerun()
                                 else: st.error("Failed to convert PDF to DOCX.")
                             else: 

@@ -53,7 +53,7 @@ def render_tab1():
                             st.session_state.tab3_current_pdf_storage_path = None
                             st.session_state.tab3_current_docx_storage_path = None
                             st.session_state.show_quotation_success_tab3 = False
-                            st.session_state.vendor_reply_saved_success_message = None # Clear any old messages
+                            st.session_state.operation_success_message = None # RENAMED: Clear any old messages
 
                             # Reset Tab 3 quotation graph cache
                             st.session_state.tab3_cached_graph_output = None
