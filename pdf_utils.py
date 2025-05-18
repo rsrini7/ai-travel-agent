@@ -13,8 +13,6 @@ class PDFQuotation(FPDF):
         self.set_right_margin(15)
         
         # Attempt to add DejaVu fonts
-        # IMPORTANT: User must place DejaVuSansCondensed.ttf and DejaVuSansCondensed-Bold.ttf
-        # in an 'assets/fonts/' directory relative to this script.
         font_regular_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed.ttf')
         font_bold_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed-Bold.ttf')
         font_italic_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed-Oblique.ttf')
@@ -72,7 +70,7 @@ class PDFQuotation(FPDF):
         self.ICON_COLLABORATION = "🤝" if self._font_supports("🤝") else "[Co]"
         self.ICON_LINK = "🔗" if self._font_supports("🔗") else "[Link]"
         self.ICON_PACKAGE = "📦" if self._font_supports("📦") else "[Pkg]"
-        self.ICON_SPARKLES = "✨" if self._font_supports("✨") else "*"  # Fallback for sparkles
+        self.ICON_SPARKLES = "✨" if self._font_supports("✨") else "*"
 
     def _font_supports(self, char): # char argument is not used by this simple check
         return self.font_family_available['regular'] # True if DejaVu regular was loaded
@@ -82,7 +80,7 @@ class PDFQuotation(FPDF):
         if os.path.exists(banner_path):
             try:
                 self.image(banner_path, x=0, y=0, w=self.w) 
-            except RuntimeError as e: # Catch FPDF image errors (e.g., unsupported format)
+            except RuntimeError as e:
                 print(f"Error loading banner image {banner_path}: {e}. Skipping image.")
                 self.ln(10)
         else:
@@ -98,7 +96,7 @@ class PDFQuotation(FPDF):
         logo_rating_path = os.path.join("assets", "tripexplore-logo-with-rating.png")
         if os.path.exists(logo_rating_path):
             img_w = 150 
-            img_h = 50 # Estimate, or get dynamically if PIL is used
+            img_h = 50 
             try:
                 self.image(logo_rating_path, x=(self.w - img_w) / 2, y=self.get_y(), w=img_w) 
                 self.ln(img_h + 5) 
@@ -174,9 +172,9 @@ class PDFQuotation(FPDF):
         self.set_font("DejaVu", "", 9)
         detailed_itinerary = data.get("detailed_itinerary", [])
         for item in detailed_itinerary:
-            day_num = str(item.get("day_number", "")) # Ensure string
-            title = str(item.get("title", item.get("segment_title", ""))) # Ensure string
-            desc = str(item.get("description", "")) # Ensure string
+            day_num = str(item.get("day_number", "")) 
+            title = str(item.get("title", item.get("segment_title", ""))) 
+            desc = str(item.get("description", "")) 
             self.set_font("DejaVu", "B", 10)
             if day_num:
                 self.multi_cell(0, 6, f"{day_num}: {title}", new_x="LMARGIN", new_y="NEXT")
@@ -203,14 +201,16 @@ class PDFQuotation(FPDF):
         self.multi_cell(0, 6, f"Total Cost for {pax} PAX: {total_cost} {data.get('currency', '')} /-", new_x="LMARGIN", new_y="NEXT")
         self.ln(2)
 
+        # --- First Highlighted Note: GST ---
         gst_note = data.get("gst_note", "GST is additional and subject to RBI Regulations.")
         self.set_fill_color(*self.highlight_bg_color)
         self.set_font("DejaVu", "B", 9)
         self.multi_cell(0, 5, f"● {gst_note}", fill=True, new_x="LMARGIN", new_y="NEXT")
-        self.set_font("DejaVu", "B", 10) 
+        self.set_font("DejaVu", "", 9) # Reset font to non-bold if subsequent text isn't bold
         self.ln(5)
 
         self.set_text_color(*self.primary_color)
+        self.set_font("DejaVu", "B", 10)
         self.cell(0, 8, "Tour Cost Includes", new_x="LMARGIN", new_y="NEXT")
         self.set_text_color(*self.text_color_dark)
         self.set_font("DejaVu", "", 9)
@@ -229,13 +229,17 @@ class PDFQuotation(FPDF):
         
         for item in exclusions: 
             self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
-        for item in standard_exclusions: # Changed Icon Here
+        for item in standard_exclusions:
             self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
         
         self.ln(2)
+        
+        # --- Second Highlighted Note: TCS (MODIFIED) ---
+        tcs_note_short = data.get("tcs_note_short", "TCS may be applicable as per government regulations.")
         self.set_fill_color(*self.highlight_bg_color)
         self.set_font("DejaVu", "B", 9)
-        self.multi_cell(0, 5, f"● {gst_note}", fill=True, new_x="LMARGIN", new_y="NEXT")
+        self.multi_cell(0, 5, f"● {tcs_note_short}", fill=True, new_x="LMARGIN", new_y="NEXT")
+        self.set_font("DejaVu", "", 9) # Reset font to non-bold if subsequent text isn't bold
         self.ln(5)
 
     def final_notes_and_contact_section(self, data: Dict[str, Any]):
@@ -311,4 +315,3 @@ def create_pdf_quotation_bytes(data: Dict[str, Any]) -> bytes:
     except Exception as e:
         print(f"[PDF DEBUG] Exception during PDF generation: {e}")
         raise
-    

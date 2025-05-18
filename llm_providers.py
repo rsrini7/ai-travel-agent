@@ -1,14 +1,8 @@
 import os
-import streamlit as st # Import Streamlit to access session_state
-from dotenv import load_dotenv
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
-
-if load_dotenv():
-    print("LLM_PROVIDERS.PY: .env file loaded successfully.")
-else:
-    print("LLM_PROVIDERS.PY: .env file not found.")
 
 def get_llm_instance(provider: str):
     """

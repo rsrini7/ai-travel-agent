@@ -1,12 +1,8 @@
 # supabase_utils.py
 import os
-import uuid # For generating unique filenames
 from supabase import create_client, Client
-from dotenv import load_dotenv
 from postgrest import APIError
 from httpx import HTTPStatusError
-
-load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") # This is likely your anon key
