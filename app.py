@@ -17,7 +17,7 @@ from sidebar import render_sidebar
 QUOTATIONS_BUCKET_NAME = "quotations"
 
 st.set_page_config(layout="wide")
-st.title("🤖 AI-Powered Travel Automation MVP")
+st.title("🤖 AI-Powered Travel Agent Automation")
 
 # --- Initialize session state variables - centralized here ---
 if 'selected_ai_provider' not in st.session_state:
