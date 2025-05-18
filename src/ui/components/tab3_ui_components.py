@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase_utils import get_public_url, create_signed_url # For file display
+from src.utils.supabase_utils import get_public_url, create_signed_url
 
 def display_enquiry_and_itinerary_details_tab3(active_enquiry_id_tab3):
     """Displays selected enquiry details and AI-generated itinerary."""

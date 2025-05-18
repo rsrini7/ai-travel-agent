@@ -1,10 +1,10 @@
 import streamlit as st
-from supabase_utils import (
+from src.utils.supabase_utils import (
     get_enquiry_by_id, add_itinerary, get_itinerary_by_enquiry_id
 )
-from itinerary_generator import generate_places_suggestion_llm
-from ui_helpers import handle_enquiry_selection # Import the helper
-from constants import ( # Import relevant session keys
+from src.core.itinerary_generator import generate_places_suggestion_llm
+from src.ui.ui_helpers import handle_enquiry_selection
+from src.utils.constants import ( # Import relevant session keys
     SESSION_KEY_TAB2_SELECTED_ENQUIRY_ID,
     SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS,
     SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID,

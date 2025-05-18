@@ -1,25 +1,25 @@
 import streamlit as st
-from supabase_utils import (
+from src.utils.supabase_utils import (
     get_enquiry_by_id, get_client_by_enquiry_id,
     get_vendor_reply_by_enquiry_id,
     get_itinerary_by_enquiry_id,
     get_quotation_by_enquiry_id
 )
 import hashlib
-from ui_helpers import handle_enquiry_selection # Import the helper
-from constants import ( # Import relevant session keys and bucket name
+from src.ui.ui_helpers import handle_enquiry_selection # Import the helper
+from src.utils.constants import ( # Import relevant session keys and bucket name
     BUCKET_QUOTATIONS,
     SESSION_KEY_TAB3_SELECTED_ENQUIRY_ID,
     SESSION_KEY_OPERATION_SUCCESS_MESSAGE
 )
 
-from tab3_ui_components import (
+from src.ui.components.tab3_ui_components import (
     display_enquiry_and_itinerary_details_tab3,
     render_vendor_reply_section,
     render_quotation_generation_section,
     display_quotation_files_section
 )
-from tab3_actions import (
+from src.ui.components.tab3_actions import (
     handle_vendor_reply_submit,
     handle_pdf_generation,
     handle_docx_generation

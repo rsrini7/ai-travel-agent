@@ -1,6 +1,6 @@
 # ui_helpers.py
 import streamlit as st
-from supabase_utils import get_enquiries
+from src.utils.supabase_utils import get_enquiries
 
 def handle_enquiry_selection(
     st_object,  # Streamlit object (st or a column/container)

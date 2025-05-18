@@ -2,7 +2,7 @@
 from typing import Dict, Any
 import os
 from fpdf import FPDF
-from constants import ( # Import constants
+from src.utils.constants import (
     FONT_DEJAVU_REGULAR, FONT_DEJAVU_BOLD, FONT_DEJAVU_ITALIC,
     IMAGE_TOP_BANNER, IMAGE_TRIPEXPLORE_LOGO_RATING
 )

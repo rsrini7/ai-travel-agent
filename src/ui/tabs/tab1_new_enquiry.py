@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase_utils import add_enquiry, add_client
+from src.utils.supabase_utils import add_enquiry, add_client
 
 def render_tab1():
     st.header("1. Submit New Enquiry")

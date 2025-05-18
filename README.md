@@ -52,47 +52,57 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 
 ```text
 .
-├── app.py                 # Main Streamlit application entry point
-├── sidebar.py             # Global sidebar configuration and AI provider selection
-├── constants.py           # Application constants and configuration
-├── ui_helpers.py          # Shared UI helper functions
+├── app.py                      # Main Streamlit application entry point
+├── requirements.txt            # Python dependencies
+├── .env.example               # Environment variable template
 │
-# Core functionality
-├── llm_prompts.py         # LLM prompt templates and configurations
-├── llm_providers.py       # LLM provider integration (Gemini, OpenRouter, Groq)
-├── itinerary_generator.py # AI-powered itinerary generation logic
-├── quotation_graph_builder.py  # LangGraph workflow for quotation generation
-│
-# File handling utilities
-├── pdf_utils.py           # PDF generation logic using FPDF2
-├── docx_utils.py          # PDF to DOCX conversion utility
-│
-# Database and storage
-├── supabase_utils.py      # Supabase database and storage utilities
-├── schema.sql            # Database schema (tables)
-├── schema-drop.sql       # Script to drop database tables
-├── storage.sql           # Supabase Storage bucket policies
-│
-# Tab implementations
-├── tab1_new_enquiry.py   # New travel enquiries tab
-├── tab2_manage_itinerary.py  # Itinerary management tab
-├── tab3_vendor_quotation.py  # Vendor quotation tab
-├── tab3_ui_components.py  # UI components for vendor quotation tab
-├── tab3_actions.py       # Action handlers for vendor quotation tab
-│
-# Assets and configuration
-├── assets/               # Static assets
-│   ├── fonts/           # Custom fonts for PDF generation
+├── assets/                   # Static assets
+│   ├── fonts/                # Custom fonts for PDF generation
 │   │   ├── DejaVuSansCondensed.ttf
 │   │   ├── DejaVuSansCondensed-Bold.ttf
 │   │   └── DejaVuSansCondensed-Oblique.ttf
-│   ├── top_banner.png   # Banner image for PDF header
+│   ├── top_banner.png        # Banner image for PDF header
 │   └── tripexplore-logo-with-rating.png  # Logo for PDF header
 │
-# Project configuration
-├── .env.example         # Environment variable template
-├── requirements.txt     # Python dependencies
-└── README.md            # Project documentation
+├── src/                     # Source code package
+│   ├── __init__.py          # Package initialization
+│   │
+│   ├── core/              # Core business logic
+│   │   ├── __init__.py
+│   │   ├── itinerary_generator.py    # AI-powered itinerary generation
+│   │   └── quotation_graph_builder.py # LangGraph workflow for quotations
+│   │
+│   ├── llm/               # LLM related functionality
+│   │   ├── __init__.py
+│   │   ├── llm_prompts.py     # Prompt templates and configurations
+│   │   └── llm_providers.py   # LLM provider integration (Gemini, OpenRouter, Groq)
+│   │
+│   ├── ui/                 # User interface components
+│   │   ├── __init__.py
+│   │   ├── sidebar.py        # Global sidebar configuration
+│   │   ├── ui_helpers.py     # Shared UI helper functions
+│   │   │
+│   │   ├── components/     # Reusable UI components
+│   │   │   ├── __init__.py
+│   │   │   ├── tab3_actions.py        # Action handlers for tab3
+│   │   │   └── tab3_ui_components.py  # UI components for tab3
+│   │   │
+│   │   └── tabs/          # Tab implementations
+│   │       ├── __init__.py
+│   │       ├── tab1_new_enquiry.py      # New travel enquiries tab
+│   │       ├── tab2_manage_itinerary.py # Itinerary management tab
+│   │       └── tab3_vendor_quotation.py # Vendor quotation tab
+│   │
+│   └── utils/             # Utility functions
+│       ├── __init__.py
+│       ├── constants.py      # Application constants
+│       ├── docx_utils.py     # PDF to DOCX conversion
+│       ├── pdf_utils.py      # PDF generation logic
+│       └── supabase_utils.py # Database and storage utilities
+│
+├── schema.sql              # Database schema (tables)
+├── schema-drop.sql         # Script to drop database tables
+└── storage.sql             # Supabase Storage bucket policies
 ```
 
 ---

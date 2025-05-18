@@ -1,16 +1,12 @@
 # supabase_utils.py
 import os
-import uuid 
 from supabase import create_client, Client
-from dotenv import load_dotenv
 from postgrest import APIError
 from httpx import HTTPStatusError
-from constants import ( # Import constants
+from src.utils.constants import (
     TABLE_CLIENTS, TABLE_ENQUIRIES, TABLE_ITINERARIES,
-    TABLE_VENDOR_REPLIES, TABLE_QUOTATIONS, BUCKET_QUOTATIONS
+    TABLE_VENDOR_REPLIES, TABLE_QUOTATIONS
 )
-
-load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") 

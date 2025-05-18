@@ -1,16 +1,15 @@
 # tab3_actions.py
 import streamlit as st
-from supabase_utils import (
+from src.utils.supabase_utils import (
     add_vendor_reply,
     add_quotation, update_quotation_storage_path,
     upload_file_to_storage
 )
-from quotation_graph_builder import run_quotation_generation_graph
-from docx_utils import convert_pdf_bytes_to_docx_bytes
-from constants import BUCKET_QUOTATIONS # Import constant
+from src.core.quotation_graph_builder import run_quotation_generation_graph
+from src.utils.docx_utils import convert_pdf_bytes_to_docx_bytes
+from src.utils.constants import BUCKET_QUOTATIONS
 import uuid
 from datetime import datetime
-import hashlib
 
 def handle_vendor_reply_submit(active_enquiry_id_tab3: str, vendor_reply_text_input: str):
     if not vendor_reply_text_input:

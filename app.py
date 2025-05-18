@@ -6,16 +6,14 @@ load_dotenv()
 import streamlit as st
 
 # Import tab rendering functions
-from tab1_new_enquiry import render_tab1
-from tab2_manage_itinerary import render_tab2
-from tab3_vendor_quotation import render_tab3
+from src.ui.tabs.tab1_new_enquiry import render_tab1
+from src.ui.tabs.tab2_manage_itinerary import render_tab2
+from src.ui.tabs.tab3_vendor_quotation import render_tab3
 
 # Import sidebar rendering function
-from sidebar import render_sidebar
-from constants import BUCKET_QUOTATIONS # Import constant
+from src.ui.sidebar import render_sidebar
+from src.utils.constants import BUCKET_QUOTATIONS
 
-# --- CONFIGURATION ---
-# QUOTATIONS_BUCKET_NAME = "quotations" # Replaced by constant
 
 st.set_page_config(layout="wide")
 st.title("🤖 AI-Powered Travel Agent Automation")

@@ -8,12 +8,12 @@ from langgraph.graph import StateGraph, END
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 
-from llm_providers import get_llm_instance
-from llm_prompts import (
+from src.llm.llm_providers import get_llm_instance
+from src.llm.llm_prompts import (
     VENDOR_REPLY_PARSING_PROMPT_TEMPLATE_STRING,
     QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
 )
-from pdf_utils import create_pdf_quotation_bytes
+from src.utils.pdf_utils import create_pdf_quotation_bytes
 from fpdf import FPDF
 
 # ... (create_error_pdf_instance and sanitize_for_standard_font remain the same) ...

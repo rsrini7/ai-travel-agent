@@ -1,9 +1,8 @@
 # itinerary_generator.py
-import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from llm_providers import get_llm_instance
-from llm_prompts import PLACES_SUGGESTION_PROMPT_TEMPLATE_STRING
+from src.llm.llm_providers import get_llm_instance
+from src.llm.llm_prompts import PLACES_SUGGESTION_PROMPT_TEMPLATE_STRING
 
 def generate_places_suggestion_llm(enquiry_details: dict, provider: str) -> str:
     """
