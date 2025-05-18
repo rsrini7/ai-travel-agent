@@ -30,18 +30,16 @@ def render_sidebar():
     st.sidebar.subheader("⚙️ AI Configuration")
     ai_provider_options = ["Gemini", "OpenRouter", "Groq"]
 
-    # Initialize session states if not present
-    if 'selected_ai_provider' not in st.session_state:
-        st.session_state.selected_ai_provider = "OpenRouter"
-    if 'selected_model_for_provider' not in st.session_state:
-        st.session_state.selected_model_for_provider = None # Will be set based on provider
+    # Session states are now initialized in app.py via AppSessionState
+    # Default values are handled by the Pydantic model.
 
     # --- Provider Selection ---
     current_provider_index = 0
     try:
-        current_provider_index = ai_provider_options.index(st.session_state.selected_ai_provider)
+        current_provider_index = ai_provider_options.index(st.session_state.app_state.ai_config.selected_ai_provider)
     except ValueError:
-        st.session_state.selected_ai_provider = "OpenRouter"
+        # This case should ideally not happen if default is set correctly in Pydantic model
+        st.session_state.app_state.ai_config.selected_ai_provider = "OpenRouter"
         current_provider_index = ai_provider_options.index("OpenRouter")
 
     selected_provider = st.sidebar.selectbox(
@@ -51,13 +49,13 @@ def render_sidebar():
         key="ai_provider_selector_sidebar"
     )
 
-    provider_changed = (selected_provider != st.session_state.selected_ai_provider)
+    provider_changed = (selected_provider != st.session_state.app_state.ai_config.selected_ai_provider)
     if provider_changed:
-        st.session_state.selected_ai_provider = selected_provider
-        st.session_state.selected_model_for_provider = None # Reset model when provider changes
+        st.session_state.app_state.ai_config.selected_ai_provider = selected_provider
+        st.session_state.app_state.ai_config.selected_model_for_provider = None # Reset model when provider changes
 
     # --- Model Selection (Dynamic) ---
-    active_provider = st.session_state.selected_ai_provider
+    active_provider = st.session_state.app_state.ai_config.selected_ai_provider
     model_selection_key = f"model_selector_{active_provider}" # Unique key for selectbox
 
     if active_provider in PROVIDER_MODEL_OPTIONS:
@@ -71,17 +69,18 @@ def render_sidebar():
             default_model_env_var = os.getenv("GROQ_DEFAULT_MODEL")
 
         # Use session state for selected model or fallback to env var or first in list
-        if st.session_state.selected_model_for_provider and st.session_state.selected_model_for_provider in available_models:
-            current_model_index = available_models.index(st.session_state.selected_model_for_provider)
+        if st.session_state.app_state.ai_config.selected_model_for_provider and \
+           st.session_state.app_state.ai_config.selected_model_for_provider in available_models:
+            current_model_index = available_models.index(st.session_state.app_state.ai_config.selected_model_for_provider)
         elif default_model_env_var and default_model_env_var in available_models:
             current_model_index = available_models.index(default_model_env_var)
-            st.session_state.selected_model_for_provider = default_model_env_var # Set session state
+            st.session_state.app_state.ai_config.selected_model_for_provider = default_model_env_var # Set session state
         elif available_models:
             current_model_index = 0
-            st.session_state.selected_model_for_provider = available_models[0] # Set session state
+            st.session_state.app_state.ai_config.selected_model_for_provider = available_models[0] # Set session state
         else: # Should not happen if PROVIDER_MODEL_OPTIONS is well-defined
             current_model_index = 0
-            st.session_state.selected_model_for_provider = None
+            st.session_state.app_state.ai_config.selected_model_for_provider = None
 
 
         selected_model = st.sidebar.selectbox(
@@ -90,21 +89,21 @@ def render_sidebar():
             index=current_model_index,
             key=model_selection_key
         )
-        if selected_model != st.session_state.selected_model_for_provider:
-            st.session_state.selected_model_for_provider = selected_model
+        if selected_model != st.session_state.app_state.ai_config.selected_model_for_provider:
+            st.session_state.app_state.ai_config.selected_model_for_provider = selected_model
             # No st.rerun() needed here typically, as the change will be picked up on next LLM call.
             # However, if other UI elements depend on this immediately, a rerun might be desired.
             # For this use case, it's generally fine.
 
     else: # For providers like Gemini that have a fixed model in this app
-        st.session_state.selected_model_for_provider = None # No specific model selection
+        st.session_state.app_state.ai_config.selected_model_for_provider = None # No specific model selection
 
     # --- Display Current Configuration ---
-    st.sidebar.caption(f"Using Provider: {st.session_state.selected_ai_provider}")
-    if st.session_state.selected_ai_provider == "Gemini":
-        st.sidebar.caption(f"Gemini Model: {st.session_state.selected_model_for_provider}")
-    elif st.session_state.selected_model_for_provider:
-        st.sidebar.caption(f"Using Model: {st.session_state.selected_model_for_provider}")
+    st.sidebar.caption(f"Using Provider: {st.session_state.app_state.ai_config.selected_ai_provider}")
+    if st.session_state.app_state.ai_config.selected_ai_provider == "Gemini":
+        st.sidebar.caption(f"Gemini Model: {st.session_state.app_state.ai_config.selected_model_for_provider}")
+    elif st.session_state.app_state.ai_config.selected_model_for_provider:
+        st.sidebar.caption(f"Using Model: {st.session_state.app_state.ai_config.selected_model_for_provider}")
     
     # Rerun if provider changed to update the model dropdown correctly
     if provider_changed:

@@ -10,3 +10,4 @@ langchain-groq
 fpdf2
 python-docx
 pdf2docx
+pydantic

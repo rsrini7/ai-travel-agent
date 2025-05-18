@@ -8,12 +8,12 @@ def get_llm_instance(provider: str):
     """
     Returns an LLM instance based on the specified provider and selected model from session state.
     """
-    selected_model = st.session_state.get('selected_model_for_provider')
+    selected_model = st.session_state.app_state.ai_config.selected_model_for_provider
 
     if provider == "Gemini":
         api_key = os.getenv("GOOGLE_API_KEY")
         # model_for_api_call should be what the sidebar has set in session_state.
-        model_for_api_call = st.session_state.get('selected_model_for_provider')
+        model_for_api_call = st.session_state.app_state.ai_config.selected_model_for_provider
         
         # Fallback if session state isn't populated (e.g. very first script run before sidebar effect).
         # The sidebar should quickly align this on its first pass.
