@@ -6,9 +6,8 @@ from src.utils.supabase_utils import (
     get_quotation_by_enquiry_id
 )
 import hashlib
-from src.ui.ui_helpers import handle_enquiry_selection # Import the helper
-from src.utils.constants import ( # Import relevant session keys and bucket name
-    BUCKET_QUOTATIONS,
+from src.ui.ui_helpers import handle_enquiry_selection
+from src.utils.constants import (
     SESSION_KEY_TAB3_SELECTED_ENQUIRY_ID,
     SESSION_KEY_OPERATION_SUCCESS_MESSAGE
 )
@@ -136,9 +135,8 @@ def render_tab3():
                 lambda aid, ckey: handle_docx_generation(aid, ckey),
                 current_graph_cache_key
             )
-
-        # Pass BUCKET_QUOTATIONS (from constants) to the display function
-        display_quotation_files_section(active_enquiry_id_tab3, BUCKET_QUOTATIONS) 
+            
+        display_quotation_files_section(active_enquiry_id_tab3) 
 
     else:
         # This message is now handled by handle_enquiry_selection if enquiries_list is empty

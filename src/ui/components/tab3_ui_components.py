@@ -1,5 +1,6 @@
 import streamlit as st
 from src.utils.supabase_utils import get_public_url, create_signed_url
+from src.utils.constants import BUCKET_QUOTATIONS
 
 def display_enquiry_and_itinerary_details_tab3(active_enquiry_id_tab3):
     """Displays selected enquiry details and AI-generated itinerary."""
@@ -67,7 +68,7 @@ def render_quotation_generation_section(active_enquiry_id_tab3, handle_pdf_gener
             handle_docx_generation_func(active_enquiry_id_tab3, current_graph_cache_key)
 
 
-def display_quotation_files_section(active_enquiry_id_tab3, QUOTATIONS_BUCKET_NAME):
+def display_quotation_files_section(active_enquiry_id_tab3):
     """Displays download/view links for generated quotation files."""
     st.markdown("---")
     st.subheader("Download/View Quotation Files")
@@ -80,11 +81,11 @@ def display_quotation_files_section(active_enquiry_id_tab3, QUOTATIONS_BUCKET_NA
         pdf_path_to_show = st.session_state.get('tab3_current_pdf_storage_path')
         if pdf_path_to_show:
             has_any_file_info = True
-            pdf_public_url = get_public_url(QUOTATIONS_BUCKET_NAME, pdf_path_to_show)
+            pdf_public_url = get_public_url(BUCKET_QUOTATIONS, pdf_path_to_show)
             if pdf_public_url:
                 st.markdown(f"[:cloud: View/Download Stored PDF]({pdf_public_url})", unsafe_allow_html=True)
             else:
-                signed_url_pdf, err_sign_pdf = create_signed_url(QUOTATIONS_BUCKET_NAME, pdf_path_to_show)
+                signed_url_pdf, err_sign_pdf = create_signed_url(BUCKET_QUOTATIONS, pdf_path_to_show)
                 if signed_url_pdf:
                     st.markdown(f"[:lock: Download Stored PDF (Signed URL)]({signed_url_pdf})", unsafe_allow_html=True)
                 elif err_sign_pdf:
@@ -105,11 +106,11 @@ def display_quotation_files_section(active_enquiry_id_tab3, QUOTATIONS_BUCKET_NA
         docx_path_to_show = st.session_state.get('tab3_current_docx_storage_path')
         if docx_path_to_show:
             has_any_file_info = True
-            docx_public_url = get_public_url(QUOTATIONS_BUCKET_NAME, docx_path_to_show)
+            docx_public_url = get_public_url(BUCKET_QUOTATIONS, docx_path_to_show)
             if docx_public_url:
                 st.markdown(f"[:cloud: View/Download Stored DOCX]({docx_public_url})", unsafe_allow_html=True)
             else:
-                signed_url_docx, err_sign_docx = create_signed_url(QUOTATIONS_BUCKET_NAME, docx_path_to_show)
+                signed_url_docx, err_sign_docx = create_signed_url(BUCKET_QUOTATIONS, docx_path_to_show)
                 if signed_url_docx:
                     st.markdown(f"[:lock: Download Stored DOCX (Signed URL)]({signed_url_docx})", unsafe_allow_html=True)
                 elif err_sign_docx:
