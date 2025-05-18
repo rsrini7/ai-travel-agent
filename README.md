@@ -116,6 +116,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 - API Keys:
   - Google API Key (if using Gemini)
   - OpenRouter API Key (if using OpenRouter)
+  - Groq API Key (if using Groq)
 
 ### Steps
 

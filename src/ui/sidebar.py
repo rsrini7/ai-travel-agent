@@ -17,7 +17,8 @@ PROVIDER_MODEL_OPTIONS = {
         "meta-llama/llama-4-scout-17b-16e-instruct",
         "deepseek-r1-distill-llama-70b",
         "qwen-qwq-32b"
-    ]
+    ],
+    "Gemini": ["gemini-1.5-flash-latest"]
 }
 
 
@@ -100,12 +101,11 @@ def render_sidebar():
 
     # --- Display Current Configuration ---
     st.sidebar.caption(f"Using Provider: {st.session_state.selected_ai_provider}")
-    if st.session_state.selected_model_for_provider:
+    if st.session_state.selected_ai_provider == "Gemini":
+        st.sidebar.caption(f"Gemini Model: {st.session_state.selected_model_for_provider}")
+    elif st.session_state.selected_model_for_provider:
         st.sidebar.caption(f"Using Model: {st.session_state.selected_model_for_provider}")
-    elif st.session_state.selected_ai_provider == "Gemini":
-        st.sidebar.caption(f"Gemini Model: gemini-1.5-flash-latest (fixed)")
-
-
+    
     # Rerun if provider changed to update the model dropdown correctly
     if provider_changed:
         st.rerun()

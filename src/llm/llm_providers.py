@@ -8,15 +8,16 @@ def get_llm_instance(provider: str):
     """
     Returns an LLM instance based on the specified provider and selected model from session state.
     """
-    selected_model = st.session_state.get('selected_model_for_provider') # Get model from session state
+    selected_model = st.session_state.get('selected_model_for_provider')
 
     if provider == "Gemini":
         api_key = os.getenv("GOOGLE_API_KEY")
+        model = os.getenv("GOOGLE_DEFAULT_MODEL", "gemini-1.5-flash-latest")
+        st.session_state.selected_model_for_provider = model
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found for Gemini. Check .env file.")
-        # Gemini uses a fixed model in this app configuration
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
+            model=model,
             google_api_key=api_key,
             request_options={"timeout": 120}
         )
