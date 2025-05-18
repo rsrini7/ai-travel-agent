@@ -168,10 +168,10 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 6. **Prepare Assets (for PDF Generation):**
    - The PDF generation uses custom fonts and images.
    - The DejaVu fonts are included in `assets/fonts/`.
-   - You need to provide the following image files in the `assets/` directory:
-     - `assets/top_banner.png` (a banner image for the top of the PDF)
-     - `assets/tripexplore-logo-with-rating.png` (a logo image)
-   - If these images are not present, the PDF generation will print warnings and skip them.
+  - You need to provide the following image files in the `assets/` directory for full visual functionality:
+    - `assets/top_banner.png` (a banner image for the top of the PDF)
+    - `assets/tripexplore-logo-with-rating.png` (a logo image)
+  - These image files are optional - if not present, the PDF generation will print warnings and skip them, but all core functionality will still work.
 
 ---
 
