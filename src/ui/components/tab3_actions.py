@@ -1,4 +1,4 @@
-# tab3_actions.py
+# src/ui/components/tab3_actions.py
 import streamlit as st
 from src.utils.supabase_utils import (
     add_vendor_reply,
@@ -7,7 +7,7 @@ from src.utils.supabase_utils import (
 )
 from src.core.quotation_graph_builder import run_quotation_generation_graph
 from src.utils.docx_utils import convert_pdf_bytes_to_docx_bytes
-from src.utils.constants import BUCKET_QUOTATIONS
+from src.utils.constants import BUCKET_QUOTATIONS # Import constant
 import uuid
 from datetime import datetime
 
@@ -21,11 +21,16 @@ def handle_vendor_reply_submit(active_enquiry_id_tab3: str, vendor_reply_text_in
         if reply_data:
             st.session_state.operation_success_message = f"Vendor reply saved for enquiry ID: {active_enquiry_id_tab3[:8]}..."
             st.session_state.tab3_vendor_reply_info = {'text': reply_data['reply_text'], 'id': reply_data['id']}
+            # Invalidate graph cache and clear outputs as vendor reply changed
             st.session_state.tab3_cached_graph_output = None
             st.session_state.tab3_cache_key = None
             st.session_state.tab3_quotation_pdf_bytes = None
             st.session_state.tab3_quotation_docx_bytes = None
             st.session_state.show_quotation_success_tab3 = False
+            # Reset current quotation DB record info as it's tied to the previous vendor reply
+            st.session_state.tab3_current_quotation_db_id = None
+            st.session_state.tab3_current_pdf_storage_path = None
+            st.session_state.tab3_current_docx_storage_path = None
             st.rerun()
         else:
             st.error(f"Failed to save vendor reply. {error_msg_reply_add or 'Unknown error'}")
@@ -35,11 +40,13 @@ def _handle_pdf_processing_and_storage(
     active_enquiry_id: str,
     pdf_bytes_output: bytes,
     structured_data_dict: dict,
-    is_error_content_in_pdf: bool
+    is_error_content_in_pdf: bool # True if pdf_bytes_output represents an error document from the graph
 ):
     """Handles PDF specific processing: storage, DB update, session state."""
-    if pdf_bytes_output and not is_error_content_in_pdf and len(pdf_bytes_output) > 1000: # Basic validity check
-        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
+    # Store the generated PDF bytes in session state for local download, regardless of success/error content
+    st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
+    
+    if pdf_bytes_output and not is_error_content_in_pdf and len(pdf_bytes_output) > 1000: # Basic validity check for actual content
         storage_path_for_db = None
         with st.spinner("Uploading PDF to cloud storage..."):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -50,48 +57,48 @@ def _handle_pdf_processing_and_storage(
         
         if upload_err:
             st.error(f"PDF generated, but failed to upload: {upload_err}")
-            # PDF bytes are already in session state for local download
         else:
             st.session_state.tab3_current_pdf_storage_path = storage_path_for_db
 
         with st.spinner("Saving PDF quotation data to database..."):
-            # If a DOCX was generated in a previous step of THIS SAME overall quotation generation flow (unlikely but covering state)
-            # it would be in st.session_state.tab3_current_docx_storage_path.
-            # However, typically PDF is generated first, then DOCX if requested, updating the same record.
+            # PDF generation always creates a new quotation record.
+            # docx_storage_path is None here because it's reset before PDF gen.
+            # If DOCX is generated later, it will update this record.
             q_data, q_error = add_quotation(
                 enquiry_id=active_enquiry_id,
                 structured_data_json=structured_data_dict,
                 itinerary_used_id=st.session_state.tab3_itinerary_info.get('id'),
                 vendor_reply_used_id=st.session_state.tab3_vendor_reply_info.get('id'),
                 pdf_storage_path=storage_path_for_db,
-                docx_storage_path=st.session_state.get('tab3_current_docx_storage_path') # Preserve if DOCX existed from a *prior* generation
+                docx_storage_path=None 
             )
             if q_error:
                 st.error(f"Failed to save PDF quotation data: {q_error}")
             else:
                 st.session_state.tab3_current_quotation_db_id = q_data['id']
-                if not upload_err: # Only show full success if upload also worked
+                if not upload_err: 
                     st.session_state.operation_success_message = "Quotation PDF generated, uploaded, and data saved!"
                 else:
                     st.session_state.operation_success_message = "Quotation PDF generated and data saved (upload failed)."
                 st.session_state.show_quotation_success_tab3 = True
-                st.rerun() # Rerun to reflect new state (e.g., download links)
+                st.rerun() 
     else:
-        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output # Store error PDF for download
-        st.error("Failed to generate a valid PDF. Error PDF might be available for download.")
-        st.session_state.show_quotation_success_tab3 = False
-
+        # This case means pdf_bytes_output was None, too small, or flagged as error content
+        st.error("Failed to generate a valid PDF for storage. An error PDF might be available for local download.")
+        st.session_state.show_quotation_success_tab3 = False # No full success
 
 def _handle_docx_processing_and_storage(
     active_enquiry_id: str,
     docx_bytes_for_upload: bytes | None, # Actual DOCX bytes
     structured_data_dict: dict, # From the graph (same as for PDF)
-    is_error_content_in_original_pdf: bool, # Info about the source PDF
+    is_source_pdf_an_error_document: bool, # Info about the source PDF
     source_pdf_bytes: bytes # The PDF from which DOCX was (or was attempted to be) converted
 ):
     """Handles DOCX specific processing: storage, DB update, session state."""
+    # Store DOCX bytes in session state if successfully generated
+    st.session_state.tab3_quotation_docx_bytes = docx_bytes_for_upload
+    
     if docx_bytes_for_upload: # DOCX conversion was successful
-        st.session_state.tab3_quotation_docx_bytes = docx_bytes_for_upload
         storage_path_for_db_docx = None
 
         with st.spinner("Uploading DOCX to cloud storage..."):
@@ -108,10 +115,9 @@ def _handle_docx_processing_and_storage(
             st.session_state.tab3_current_docx_storage_path = storage_path_for_db_docx
         
         with st.spinner("Saving/updating DOCX quotation data..."):
-            # Check if a PDF was already generated and a record exists
             existing_quotation_id = st.session_state.get('tab3_current_quotation_db_id')
             
-            if existing_quotation_id:
+            if existing_quotation_id: # A PDF was likely generated first and record exists
                 _, upd_err = update_quotation_storage_path(
                     existing_quotation_id, 'docx_storage_path', storage_path_for_db_docx
                 )
@@ -123,12 +129,14 @@ def _handle_docx_processing_and_storage(
                     else:
                          st.session_state.operation_success_message = "DOCX generated and DB record updated (upload failed)!"
                     st.rerun()
-            else: # No existing record, create a new one (PDF might not have been generated/saved successfully before)
+            else: # No existing record (e.g., DOCX generated before PDF or PDF failed to save to DB)
+                  # Create a new quotation record primarily for this DOCX.
+                  # PDF path might be None or from a previous failed attempt stored in session.
                 q_data_dx, q_err_dx = add_quotation(
                     active_enquiry_id, structured_data_dict,
                     st.session_state.tab3_itinerary_info.get('id'),
                     st.session_state.tab3_vendor_reply_info.get('id'),
-                    pdf_storage_path=st.session_state.get('tab3_current_pdf_storage_path'), # Preserve if PDF was somehow made
+                    pdf_storage_path=st.session_state.get('tab3_current_pdf_storage_path'), 
                     docx_storage_path=storage_path_for_db_docx
                 )
                 if q_err_dx:
@@ -143,134 +151,153 @@ def _handle_docx_processing_and_storage(
         st.session_state.show_quotation_success_tab3 = True
 
     else: # DOCX conversion failed or original PDF was an error doc
-        st.session_state.tab3_quotation_docx_bytes = None # No valid DOCX bytes
-        if is_error_content_in_original_pdf:
-            st.error("Could not generate DOCX because the underlying PDF data was an error document.")
-            if source_pdf_bytes: # The error PDF from graph
+        if is_source_pdf_an_error_document:
+            st.error("Could not generate DOCX because the underlying PDF data was an error document or invalid.")
+            if source_pdf_bytes: 
                 st.download_button(
-                    "Download Intermediate Error PDF", source_pdf_bytes, 
-                    f"Error_PDF_for_DOCX_{active_enquiry_id[:4]}.pdf", "application/pdf", 
+                    "Download Intermediate PDF (source for DOCX)", source_pdf_bytes, 
+                    f"Source_PDF_for_DOCX_{active_enquiry_id[:4]}.pdf", "application/pdf", 
                     key="err_pdf_docx_action_dl"
                 )
-        else:
+        else: # actual_docx_bytes is None but source_pdf was not an error document
             st.error("Failed to convert PDF to DOCX.")
         st.session_state.show_quotation_success_tab3 = False
 
+# --- Centralized Quotation Graph Data Generation ---
+def _get_or_generate_quotation_graph_data(current_graph_cache_key: str) -> tuple[bytes | None, dict | None, bool]:
+    """
+    Retrieves quotation graph data (PDF bytes, structured JSON) from cache or generates it.
+    Returns:
+        tuple: (pdf_bytes, structured_data, has_critical_error)
+               pdf_bytes and structured_data can be None if critical error.
+               has_critical_error is True if generation failed critically.
+               If pdf_bytes are returned, they are also stored in st.session_state.tab3_quotation_pdf_bytes.
+    """
+    if st.session_state.tab3_cached_graph_output and st.session_state.tab3_cache_key == current_graph_cache_key:
+        st.info("Using cached data for quotation generation.")
+        pdf_bytes, structured_data = st.session_state.tab3_cached_graph_output
+        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes # Ensure it's in session for download
+        return pdf_bytes, structured_data, False 
+
+    # Prepare data for graph
+    itinerary_text_for_graph = st.session_state.tab3_itinerary_info.get('text', "Itinerary suggestions not available.")
+    current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
+    current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
+    provider_for_generation = st.session_state.selected_ai_provider
+    
+    with st.spinner(f"Generating quotation data with {provider_for_generation}..."):
+        pdf_bytes_output, structured_data_dict = run_quotation_generation_graph(
+            current_enquiry_details_for_gen,
+            st.session_state.tab3_vendor_reply_info['text'],
+            itinerary_text_for_graph,
+            provider_for_generation
+        )
+    
+    # Store whatever PDF bytes came back, even if it's an error PDF
+    if pdf_bytes_output:
+        st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
+
+    is_graph_error = (
+        not pdf_bytes_output or
+        not structured_data_dict or 
+        structured_data_dict.get("error") or
+        (b"Error generating PDF" in pdf_bytes_output) or 
+        (b"Quotation Generation Failed" in pdf_bytes_output)
+    )
+
+    if not is_graph_error:
+        st.session_state.tab3_cached_graph_output = (pdf_bytes_output, structured_data_dict)
+        st.session_state.tab3_cache_key = current_graph_cache_key
+        st.caption("Quotation data generated and cached.")
+        return pdf_bytes_output, structured_data_dict, False
+    else:
+        st.session_state.tab3_cached_graph_output = None
+        st.session_state.tab3_cache_key = None
+        
+        error_message = "Unknown graph error during data generation."
+        raw_output_preview = "N/A"
+
+        if structured_data_dict and structured_data_dict.get("error"):
+            error_message = structured_data_dict.get("error")
+        elif not pdf_bytes_output:
+            error_message = "Graph did not return PDF bytes."
+        elif not structured_data_dict:
+             error_message = "Graph did not return structured data."
+        elif b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output:
+            error_message = "Generated PDF indicates an error in content generation."
+
+        if structured_data_dict and structured_data_dict.get('raw_output'):
+            raw_output_preview = structured_data_dict['raw_output']
+
+        st.error(f"Error from quotation graph: {error_message}")
+        if raw_output_preview != "N/A":
+            st.expander("Raw LLM Output Preview").text(raw_output_preview[:500] + "..." if len(raw_output_preview) > 500 else raw_output_preview)
+        
+        return pdf_bytes_output, structured_data_dict, True # True means critical error
 
 # --- Main PDF/DOCX Generation Triggers ---
 def handle_pdf_generation(active_enquiry_id_tab3: str, current_graph_cache_key: str):
+    # Reset states for a new PDF generation attempt
     st.session_state.tab3_quotation_pdf_bytes = None
-    st.session_state.tab3_current_pdf_storage_path = None # Reset before new generation
-    # Do not reset tab3_current_quotation_db_id here, as PDF generation might add to an existing record if DOCX was done first (unlikely flow but safer)
-    # Or, if PDF is always first, then this is fine. Let's assume PDF can be regen, so DB ID might need update or new.
-    # The add_quotation / update_quotation logic inside helpers handles this.
+    st.session_state.tab3_current_pdf_storage_path = None
+    st.session_state.tab3_quotation_docx_bytes = None 
+    st.session_state.tab3_current_docx_storage_path = None
+    st.session_state.tab3_current_quotation_db_id = None # PDF generation creates a new quotation record
     st.session_state.show_quotation_success_tab3 = False
     
-    pdf_bytes_output, structured_data_dict = None, None
-    itinerary_text_for_graph = st.session_state.tab3_itinerary_info.get('text', "Itinerary suggestions not available.")
+    pdf_bytes_output, structured_data_dict, has_critical_error = \
+        _get_or_generate_quotation_graph_data(current_graph_cache_key)
 
-    if st.session_state.tab3_cached_graph_output and st.session_state.tab3_cache_key == current_graph_cache_key:
-        st.info("Using cached data for PDF generation.")
-        pdf_bytes_output, structured_data_dict = st.session_state.tab3_cached_graph_output
-    else:
-        with st.spinner(f"Generating PDF data with {st.session_state.selected_ai_provider}..."):
-            current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
-            current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
-            
-            pdf_bytes_output, structured_data_dict = run_quotation_generation_graph(
-                current_enquiry_details_for_gen, 
-                st.session_state.tab3_vendor_reply_info['text'], 
-                itinerary_text_for_graph,
-                st.session_state.selected_ai_provider
-            )
-            is_graph_error = structured_data_dict and structured_data_dict.get("error") or \
-                             not pdf_bytes_output or \
-                             (b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output)
+    if has_critical_error:
+        st.error("PDF generation halted due to errors in data generation.")
+        # Error messages already shown. Error PDF (if any) is in st.session_state.tab3_quotation_pdf_bytes
+        return
 
-            if not is_graph_error:
-                st.session_state.tab3_cached_graph_output = (pdf_bytes_output, structured_data_dict)
-                st.session_state.tab3_cache_key = current_graph_cache_key
-                st.caption("Quotation data generated and cached.")
-            else: 
-                st.session_state.tab3_cached_graph_output = None
-                st.session_state.tab3_cache_key = None
-                st.error(f"Error from quotation graph: {structured_data_dict.get('error', 'Unknown graph error')}")
-                if structured_data_dict and structured_data_dict.get('raw_output'):
-                    st.expander("Raw LLM Output").text(structured_data_dict['raw_output'])
-                # Store error PDF if available
-                if pdf_bytes_output: st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
-                return # Stop processing
-
-    # Proceed if graph output (cached or new) is available and seems okay
-    if pdf_bytes_output and structured_data_dict and not structured_data_dict.get("error"):
-        is_error_content = b"Error generating PDF" in pdf_bytes_output or b"Quotation Generation Failed" in pdf_bytes_output
-        _handle_pdf_processing_and_storage(
-            active_enquiry_id_tab3, pdf_bytes_output, structured_data_dict, is_error_content
-        )
-    elif structured_data_dict and structured_data_dict.get("error"): # Error from graph structuring even if PDF bytes exist
-        st.error(f"Failed to structure data for PDF: {structured_data_dict.get('error')}")
-        if structured_data_dict.get('raw_output'):
-            st.expander("Raw LLM Output").text(structured_data_dict['raw_output'])
-        if pdf_bytes_output: # Store error PDF for download
-            st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_output
-
+    # If no critical error, pdf_bytes_output and structured_data_dict are considered "valid" from graph.
+    # The `is_error_content_in_pdf` for `_handle_pdf_processing_and_storage` is to distinguish
+    # a semantically correct PDF vs. one that the graph *itself* filled with error text.
+    # `has_critical_error` already covers explicit error flags from the graph.
+    # For `_handle_pdf_processing_and_storage`, if `has_critical_error` is False, we assume the PDF is not an "error PDF".
+    _handle_pdf_processing_and_storage(
+        active_enquiry_id_tab3, 
+        pdf_bytes_output, 
+        structured_data_dict, 
+        is_error_content_in_pdf=False # Assumed False if has_critical_error was False
+    )
 
 def handle_docx_generation(active_enquiry_id_tab3: str, current_graph_cache_key: str):
+    # Reset only DOCX specific states; PDF/quotation_db_id might be from a preceding PDF generation
     st.session_state.tab3_quotation_docx_bytes = None
-    st.session_state.tab3_current_docx_storage_path = None # Reset before new generation
+    st.session_state.tab3_current_docx_storage_path = None 
     st.session_state.show_quotation_success_tab3 = False
     
-    pdf_bytes_for_docx, structured_data_dict_docx = None, None # These are from the graph
-    itinerary_text_for_graph = st.session_state.tab3_itinerary_info.get('text', "Itinerary suggestions not available.")
+    pdf_bytes_for_docx, structured_data_dict_docx, has_critical_error = \
+        _get_or_generate_quotation_graph_data(current_graph_cache_key)
 
-    # Step 1: Get PDF and Structured Data (from cache or new graph run)
-    if st.session_state.tab3_cached_graph_output and st.session_state.tab3_cache_key == current_graph_cache_key:
-        st.info("Using cached data for DOCX generation.")
-        pdf_bytes_for_docx, structured_data_dict_docx = st.session_state.tab3_cached_graph_output
-    else:
-        with st.spinner(f"Generating base data with {st.session_state.selected_ai_provider}... (for DOCX)"):
-            current_enquiry_details_for_gen = st.session_state.tab3_enquiry_details.copy()
-            current_enquiry_details_for_gen["client_name_actual"] = st.session_state.tab3_client_name
-            
-            pdf_bytes_for_docx, structured_data_dict_docx = run_quotation_generation_graph(
-                current_enquiry_details_for_gen, 
-                st.session_state.tab3_vendor_reply_info['text'], 
-                itinerary_text_for_graph,
-                st.session_state.selected_ai_provider
-            )
-            is_graph_error = structured_data_dict_docx and structured_data_dict_docx.get("error") or \
-                             not pdf_bytes_for_docx or \
-                             (b"Error generating PDF" in pdf_bytes_for_docx or b"Quotation Generation Failed" in pdf_bytes_for_docx)
+    if has_critical_error:
+        st.error("DOCX generation halted due to errors in underlying data generation.")
+        # Error PDF (if any) is in st.session_state.tab3_quotation_pdf_bytes via the helper
+        return
 
-            if not is_graph_error:
-                st.session_state.tab3_cached_graph_output = (pdf_bytes_for_docx, structured_data_dict_docx)
-                st.session_state.tab3_cache_key = current_graph_cache_key
-                st.caption("Quotation data generated and cached.")
-            else:
-                st.session_state.tab3_cached_graph_output = None
-                st.session_state.tab3_cache_key = None
-                st.error(f"Error from quotation graph (for DOCX): {structured_data_dict_docx.get('error', 'Unknown graph error')}")
-                if structured_data_dict_docx and structured_data_dict_docx.get('raw_output'):
-                    st.expander("Raw LLM Output (DOCX)").text(structured_data_dict_docx['raw_output'])
-                if pdf_bytes_for_docx: st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_for_docx # Store error PDF
-                return # Stop processing
+    # If `has_critical_error` is False, `pdf_bytes_for_docx` is assumed not an "error PDF" from graph's view.
+    is_source_pdf_an_error_document_for_conversion = False 
+    actual_docx_bytes = None
+    
+    if pdf_bytes_for_docx and len(pdf_bytes_for_docx) > 1000: # Basic check for viable PDF size
+        with st.spinner("Converting PDF to DOCX..."):
+            actual_docx_bytes = convert_pdf_bytes_to_docx_bytes(pdf_bytes_for_docx)
+    elif pdf_bytes_for_docx: # PDF exists but is too small or potentially problematic
+        is_source_pdf_an_error_document_for_conversion = True 
+        st.warning("Underlying PDF data is too small or seems invalid for DOCX conversion.")
+    else: # No PDF bytes returned from graph data step, should have been caught by has_critical_error
+        is_source_pdf_an_error_document_for_conversion = True
+        st.error("Cannot generate DOCX: No underlying PDF data available.")
 
-    # Step 2: Process for DOCX if graph output is available and seems okay
-    if pdf_bytes_for_docx and structured_data_dict_docx and not structured_data_dict_docx.get("error"):
-        is_error_pdf_content = b"Error generating PDF" in pdf_bytes_for_docx or b"Quotation Generation Failed" in pdf_bytes_for_docx
-        
-        actual_docx_bytes = None
-        if not is_error_pdf_content and len(pdf_bytes_for_docx) > 1000 : # Only convert if PDF is valid
-            with st.spinner("Converting PDF to DOCX..."):
-                actual_docx_bytes = convert_pdf_bytes_to_docx_bytes(pdf_bytes_for_docx)
-        
-        _handle_docx_processing_and_storage(
-            active_enquiry_id_tab3, actual_docx_bytes, structured_data_dict_docx,
-            is_error_pdf_content, pdf_bytes_for_docx
-        )
-    elif structured_data_dict_docx and structured_data_dict_docx.get("error"): # Error from graph structuring
-        st.error(f"Failed to structure data (for DOCX): {structured_data_dict_docx.get('error')}")
-        if structured_data_dict_docx.get('raw_output'):
-            st.expander("Raw LLM Output (DOCX)").text(structured_data_dict_docx['raw_output'])
-        if pdf_bytes_for_docx: # Store error PDF for download
-            st.session_state.tab3_quotation_pdf_bytes = pdf_bytes_for_docx
+
+    _handle_docx_processing_and_storage(
+        active_enquiry_id_tab3, 
+        actual_docx_bytes, 
+        structured_data_dict_docx,
+        is_source_pdf_an_error_document_for_conversion, 
+        pdf_bytes_for_docx # Pass original PDF bytes for download if DOCX fails
+    )
