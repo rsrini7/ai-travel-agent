@@ -46,15 +46,20 @@ def sanitize_for_standard_font(text_string: str) -> str:
 class QuotationGenerationState(TypedDict):
     enquiry_details: dict
     vendor_reply_text: str
+    ai_suggested_itinerary_text: str # NEW: From Tab 2
     parsed_vendor_info_text: str
     structured_quotation_data: Dict[str, Any]
     pdf_output_bytes: bytes
     ai_provider: str
 
 def fetch_data_node(state: QuotationGenerationState):
+    # This node now primarily ensures all necessary data is passed forward.
+    # The actual fetching logic (e.g., from DB or session state) happens
+    # before invoking the graph, in tab3_vendor_quotation.py.
     return {
         "enquiry_details": state["enquiry_details"],
         "vendor_reply_text": state["vendor_reply_text"],
+        "ai_suggested_itinerary_text": state["ai_suggested_itinerary_text"], # Pass through
         "ai_provider": state["ai_provider"]
     }
 
@@ -81,6 +86,7 @@ def parse_vendor_reply_node(state: QuotationGenerationState):
 def structure_data_for_pdf_node(state: QuotationGenerationState):
     enquiry = state["enquiry_details"]
     vendor_parsed_text = state["parsed_vendor_info_text"]
+    ai_suggested_itinerary_text = state["ai_suggested_itinerary_text"] # Get from state
     provider = state["ai_provider"]
 
     try:
@@ -89,10 +95,10 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         num_nights = num_days_int - 1 if num_days_int > 0 else 0
 
         json_prompt_str = QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
-        
+
         if provider == "OpenRouter" and ("gpt" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower() or \
                                          "claude-3" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower()):
-            llm_for_json = get_llm_instance(provider) 
+            llm_for_json = get_llm_instance(provider)
             if not hasattr(llm_for_json, 'model_kwargs') or llm_for_json.model_kwargs is None:
                 llm_for_json.model_kwargs = {}
             llm_for_json.model_kwargs["response_format"] = {"type": "json_object"}
@@ -101,8 +107,8 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         elif provider == "Gemini":
             updated_json_prompt_str = json_prompt_str.replace("```json", "Please provide your response strictly in the following JSON format, ensuring all strings are correctly escaped:\n```json")
             prompt = ChatPromptTemplate.from_template(updated_json_prompt_str)
-            chain = prompt | llm | StrOutputParser() 
-        else: 
+            chain = prompt | llm | StrOutputParser()
+        else:
             prompt = ChatPromptTemplate.from_template(json_prompt_str)
             chain = prompt | llm | StrOutputParser()
 
@@ -113,28 +119,26 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
             "traveler_count": str(enquiry.get("traveler_count", "N/A")),
             "trip_type": enquiry.get("trip_type", "N/A"),
             "client_name_placeholder": f"Mr./Ms. {enquiry.get('client_name_actual', 'Valued Client')}",
+            "ai_suggested_itinerary_text": ai_suggested_itinerary_text, # Pass to prompt
             "vendor_parsed_text": vendor_parsed_text
         })
 
         structured_data = {}
-        raw_llm_output_for_error = "" 
+        raw_llm_output_for_error = ""
 
         if isinstance(response_data, str):
-            raw_llm_output_for_error = response_data 
+            raw_llm_output_for_error = response_data
             try:
                 # --- START: MORE ROBUST JSON EXTRACTION ---
-                # 1. Try to find JSON within ```json ... ``` markdown
                 match = re.search(r"```json\s*(\{.*?\})\s*```", response_data, re.DOTALL)
                 if match:
                     potential_json_str = match.group(1)
                 else:
-                    # 2. Fallback: find the first '{' and last '}'
                     cleaned_response = response_data.strip()
                     json_start_index = cleaned_response.find('{')
                     if json_start_index == -1:
                         raise json.JSONDecodeError("No JSON object found in the response.", cleaned_response, 0)
-                    
-                    # To find the matching '}', we need to count braces
+
                     open_braces = 0
                     json_end_index = -1
                     for i in range(json_start_index, len(cleaned_response)):
@@ -145,21 +149,20 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
                             if open_braces == 0:
                                 json_end_index = i
                                 break
-                    
+
                     if json_end_index == -1:
                         raise json.JSONDecodeError("Incomplete JSON object (no matching '}') in the response.", cleaned_response, 0)
-                    
+
                     potential_json_str = cleaned_response[json_start_index : json_end_index + 1]
-                
+
                 structured_data = json.loads(potential_json_str)
                 # --- END: MORE ROBUST JSON EXTRACTION ---
 
             except json.JSONDecodeError as e:
                 error_msg = f"Failed to parse JSON from LLM. Error: {e}. Preview: '{raw_llm_output_for_error[:200]}...'"
-                print(error_msg) # Log the specific JSON error and a preview
-                # print(f"LLM String Output was:\n{raw_llm_output_for_error}") # Full output can be very long
+                print(error_msg)
                 return {"structured_quotation_data": {"error": "Failed to parse JSON from LLM", "raw_output": raw_llm_output_for_error}}
-        elif isinstance(response_data, dict): 
+        elif isinstance(response_data, dict):
             structured_data = response_data
             raw_llm_output_for_error = json.dumps(response_data, indent=2)
         else:
@@ -169,42 +172,41 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         for key_list in ["inclusions", "exclusions", "standard_exclusions_list", "important_notes"]:
             if key_list in structured_data and isinstance(structured_data[key_list], list):
                 structured_data[key_list] = [str(item) for item in structured_data[key_list]]
-        
+
         if "detailed_itinerary" in structured_data and isinstance(structured_data["detailed_itinerary"], list):
             for item in structured_data["detailed_itinerary"]:
                 if isinstance(item, dict):
-                    for k,v in item.items(): item[k] = str(v) # Convert all itinerary values to strings
-        
+                    for k,v in item.items(): item[k] = str(v)
+
         if "hotel_details" in structured_data and isinstance(structured_data["hotel_details"], list):
             for item in structured_data["hotel_details"]:
                 if isinstance(item, dict):
-                    for k,v in item.items(): item[k] = str(v) # Convert all hotel values to strings
+                    for k,v in item.items(): item[k] = str(v)
 
         return {"structured_quotation_data": structured_data}
 
     except Exception as e:
         print(f"Error structuring data for PDF with LLM ({provider}): {e}")
         raw_output_on_general_exception = ""
-        if 'response_data' in locals() and response_data: # Check if response_data exists
+        if 'response_data' in locals() and response_data:
              raw_output_on_general_exception = str(response_data)
         return {"structured_quotation_data": {"error": f"LLM error during JSON generation: {e}", "raw_output": raw_output_on_general_exception}}
 
 
 def generate_pdf_node(state: QuotationGenerationState):
-    # ... (same as before) ...
     structured_data = state.get("structured_quotation_data")
     if not structured_data or "error" in structured_data:
         error_message = structured_data.get("error", "Unknown error before PDF generation")
-        raw_output = structured_data.get("raw_output", "N/A") 
+        raw_output = structured_data.get("raw_output", "N/A")
         print(f"Skipping PDF generation due to previous error: {error_message}")
         pdf, dejavu_loaded = create_error_pdf_instance()
         text_to_write = f"Error generating PDF: {error_message}\n\nLLM Raw Output:\n{raw_output}"
         if not dejavu_loaded:
             text_to_write = sanitize_for_standard_font(text_to_write)
         pdf.multi_cell(0, 10, text_to_write)
-        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))} 
+        return {"pdf_output_bytes": bytes(pdf.output(dest='S'))}
     try:
-        pdf_bytes = create_pdf_quotation_bytes(structured_data) 
+        pdf_bytes = create_pdf_quotation_bytes(structured_data)
         return {"pdf_output_bytes": pdf_bytes}
     except Exception as e:
         print(f"Critical error during PDF generation: {e}")
@@ -215,9 +217,8 @@ def generate_pdf_node(state: QuotationGenerationState):
         pdf.multi_cell(0, 10, text_to_write)
         return {"pdf_output_bytes": bytes(pdf.output(dest='S'))}
 
-# ... (rest of the file, workflow definition, and run_quotation_generation_graph remain the same) ...
 workflow = StateGraph(QuotationGenerationState)
-workflow.add_node("fetch_enquiry_and_vendor_reply", fetch_data_node)
+workflow.add_node("fetch_enquiry_and_vendor_reply", fetch_data_node) # Name can be more generic now
 workflow.add_node("parse_vendor_text", parse_vendor_reply_node)
 workflow.add_node("structure_data_for_pdf", structure_data_for_pdf_node)
 workflow.add_node("generate_pdf_document", generate_pdf_node)
@@ -230,30 +231,36 @@ workflow.add_edge("generate_pdf_document", END)
 
 quotation_generation_graph_compiled = workflow.compile()
 
-def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str, provider: str) -> tuple[bytes, Dict[str, Any] | None]:
+def run_quotation_generation_graph(
+    enquiry_details: dict,
+    vendor_reply_text: str,
+    ai_suggested_itinerary_text: str, # New parameter
+    provider: str
+) -> tuple[bytes, Dict[str, Any] | None]:
     initial_state = QuotationGenerationState(
         enquiry_details=enquiry_details,
         vendor_reply_text=vendor_reply_text,
+        ai_suggested_itinerary_text=ai_suggested_itinerary_text, # Initialize in state
         parsed_vendor_info_text="",
         structured_quotation_data={},
         pdf_output_bytes=b"",
         ai_provider=provider
     )
-    
+
     print(f"[Quotation Generation Graph] Starting PDF generation with {provider}...")
-    final_state = {} 
-    
+    final_state = {}
+
     try:
         final_state = quotation_generation_graph_compiled.invoke(initial_state)
         pdf_bytes = final_state.get("pdf_output_bytes")
-        structured_data = final_state.get("structured_quotation_data", {}) 
+        structured_data = final_state.get("structured_quotation_data", {})
 
         error_pdf_message = None
-        if not pdf_bytes: 
+        if not pdf_bytes:
             error_pdf_message = "Error: PDF generation failed, no bytes returned from graph unexpectedly."
-        elif "error" in structured_data: 
+        elif "error" in structured_data:
              error_pdf_message = f"Error in structured data: {structured_data.get('error')}"
-        
+
         if error_pdf_message:
             print(f"[Quotation Generation Graph] Warning: {error_pdf_message}")
             raw_output = structured_data.get("raw_output", "N/A")
@@ -265,20 +272,20 @@ def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str
                 pdf.multi_cell(0, 10, text_to_write)
                 pdf_bytes = bytes(pdf.output(dest='S'))
             return pdf_bytes, structured_data
-        
+
         print("[Quotation Generation Graph] PDF generation process completed.")
         return pdf_bytes, structured_data
-        
+
     except Exception as e:
         print(f"[Quotation Generation Graph] Critical error running quotation graph ({provider}): {e}")
         raw_output_from_final_state = final_state.get("structured_quotation_data", {}).get("raw_output", "N/A")
-        
+
         pdf, dejavu_loaded = create_error_pdf_instance()
         pdf.multi_cell(0, 8, sanitize_for_standard_font("Quotation Generation Failed Due to System Error") if not dejavu_loaded else "Quotation Generation Failed Due to System Error", align='C')
         pdf.ln(5)
-        
+
         if dejavu_loaded:
-            pdf.set_font("DejaVu", "", 10) 
+            pdf.set_font("DejaVu", "", 10)
         else:
             pdf.set_font("Helvetica", "", 10)
 
@@ -286,5 +293,5 @@ def run_quotation_generation_graph(enquiry_details: dict, vendor_reply_text: str
         if not dejavu_loaded:
             details_text = sanitize_for_standard_font(details_text)
         pdf.multi_cell(0, 5, details_text)
-        
+
         return bytes(pdf.output(dest='S')), {"error": f"Graph execution system error: {str(e)}", "raw_output": raw_output_from_final_state}

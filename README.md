@@ -15,7 +15,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
   - Submit new travel enquiries with details like destination, duration, number of travelers, trip type, and client information.
 - **AI Itinerary Suggestions:**
   - Generate AI-powered suggestions for places and attractions based on enquiry details.
-  - Selectable AI providers (Google Gemini, OpenRouter).
+  - Selectable AI providers (Google Gemini, OpenRouter, Groq).
 - **Vendor Reply Integration:**
   - Input and store vendor replies, including pricing, inclusions, and exclusions.
 - **AI Quotation Generation:**
@@ -27,8 +27,8 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 - **Data Persistence:**
   - All enquiries, client details, itineraries, vendor replies, and quotation metadata are stored in a Supabase PostgreSQL database.
 - **Configurable AI:**
-  - Choose between different AI providers (Gemini, OpenRouter) for content generation tasks.
-  - Specify a default model for OpenRouter via environment variables.
+  - Choose between different AI providers (Gemini, OpenRouter, Groq) for content generation tasks.
+  - Specify default models for OpenRouter and Groq via environment variables.
 
 ---
 
@@ -39,7 +39,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 - **AI/LLM Integration:**
   - Langchain
   - LangGraph (for orchestrating quotation generation steps)
-  - LLM Providers: Google Gemini, OpenRouter
+  - LLM Providers: Google Gemini, OpenRouter, Groq
 - **Document Generation:**
   - FPDF2 (`fpdf`) for PDF creation
   - `pdf2docx` for PDF to DOCX conversion
@@ -125,6 +125,8 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
      OPENROUTER_DEFAULT_MODEL="google/gemini-flash-1.5" # Example, can be overridden
      OPENROUTER_HTTP_REFERER="http://localhost:3000" # Optional, set your app's URL
      OPENROUTER_APP_TITLE="AI Travel Quotation" # Optional, set your app's title
+     GROQ_API_KEY="YOUR_GROQ_API_KEY"
+     GROQ_DEFAULT_MODEL="llama3-8b-8192" # Optional, specify default Groq model
      ```
 5. **Supabase Setup:**
    - Go to your Supabase project dashboard.
@@ -208,6 +210,8 @@ The application requires the following environment variables to be set in the `.
 - `SUPABASE_URL`: Your Supabase project URL.
 - `SUPABASE_KEY`: Your Supabase anon key (or service role key if your RLS policies require it).
 - `GOOGLE_API_KEY`: Your API key for Google AI Studio (for Gemini).
+- `GROQ_API_KEY`: Your API key for Groq (for Groq models).
+- `GROQ_DEFAULT_MODEL`: (Optional) Default model to use with Groq (default: 'llama3-8b-8192').
 - `OPENROUTER_API_KEY`: Your API key for OpenRouter.ai.
 - `OPENROUTER_DEFAULT_MODEL`: (Optional) The default model to use with OpenRouter (e.g., `google/gemini-flash-1.5`, `openai/gpt-3.5-turbo`). Defaults to `google/gemini-flash-1.5` if not set.
 - `OPENROUTER_HTTP_REFERER`: (Optional) Your site URL or app name, sent as `HTTP-Referer` to OpenRouter. Defaults to `http://localhost:3000`.

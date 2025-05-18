@@ -1,7 +1,7 @@
 # llm_prompts.py
 
 # Prompt for generating places suggestions
-PLACES_SUGGESTION_PROMPT_TEMPLATE_STRING = """You are a helpful travel assistant. 
+PLACES_SUGGESTION_PROMPT_TEMPLATE_STRING = """You are a helpful travel assistant.
 Based on the following enquiry, suggest a list of key places, attractions, or activities to cover. Do not create a day-wise plan. Just list the suggestions.
 
 Enquiry:
@@ -14,7 +14,7 @@ Provide the output as a comma-separated list or a bulleted list of suggestions."
 
 
 # Prompt for parsing vendor replies
-VENDOR_REPLY_PARSING_PROMPT_TEMPLATE_STRING = """You are an expert at parsing vendor replies for travel quotations. 
+VENDOR_REPLY_PARSING_PROMPT_TEMPLATE_STRING = """You are an expert at parsing vendor replies for travel quotations.
 From the vendor reply provided below, extract the following information clearly:
 1.  **Proposed Itinerary:** (Day-by-day plan or tour flow. If none, state 'Itinerary not specified by vendor.')
 2.  **Hotel Details:** (List any mentioned hotels, their category, and for which city/duration if specified. If none, state 'Hotel details not specified by vendor'.)
@@ -39,29 +39,32 @@ Output the extracted information clearly under respective headings."""
 # Prompt for structuring data for PDF (JSON Output)
 QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING = """
 You are a travel agent assistant preparing data for a PDF quotation document.
-Your goal is to transform the Client Enquiry Details and the Parsed Vendor Information into a single, structured JSON object.
+Your goal is to transform the Client Enquiry Details, AI-Suggested Itinerary, and Parsed Vendor Information into a single, structured JSON object.
 Strictly adhere to the JSON format and all specified keys. Ensure all string values are properly escaped for JSON.
 
 **Information Sources:**
 1.  **Client Enquiry Details:** Basic trip requirements.
-2.  **Parsed Vendor Information:** This is output from a previous step where a vendor's textual reply was processed. It *should* contain specific details like proposed itinerary, hotel details, pricing, meals included, room configuration, inclusions, and exclusions provided by the vendor.
+2.  **AI-Suggested Itinerary (from preliminary planning):** A list of suggested places or activities, or a more general textual suggestion. This is sourced from an earlier AI generation step (Tab 2).
+3.  **Parsed Vendor Information:** This is output from a previous step where a vendor's textual reply was processed. It *should* contain specific details like proposed itinerary, hotel details, pricing, meals included, room configuration, inclusions, and exclusions provided by the vendor.
 
 **Crucial Task: Detailed Itinerary Generation**
 - You MUST generate a comprehensive, engaging, day-wise itinerary for the full duration of `{num_days}` days.
-- Source information primarily from the "Proposed Itinerary" section of the "Parsed Vendor Information."
+- **Primary Source:** Use the "Proposed Itinerary" from the "Parsed Vendor Information" if available and detailed.
+- **Secondary Source (if vendor itinerary is missing, brief, or needs enhancement):** Refer to the "AI-Suggested Itinerary (from preliminary planning)". Incorporate these suggestions to create or enrich the day-wise plan. This might be a list of places, attractions, or a textual description.
 - **Structure each day** within the "detailed_itinerary" list as an object containing:
     - "day_number": (String, e.g., "Day 1", "Day 2")
     - "title": (String, a concise and appealing headline for the day's activities, e.g., "Arrival in Paris & Eiffel Tower Magic", "Exploring Ancient Rome: Colosseum & Forum")
     - "description": (String, a well-written paragraph or two detailing the day's activities, sightseeing, meals if specified, and flow. Use descriptive language to make it sound attractive to the client.)
 - **Completeness:**
-    - If the vendor's itinerary is detailed and covers all `{num_days}` days, adapt it to the structure above, enhancing descriptions where possible.
+    - If the vendor's itinerary ("Proposed Itinerary" in Parsed Vendor Information) is detailed and covers all `{num_days}` days, adapt it to the structure above. You can enhance descriptions using relevant ideas from the "AI-Suggested Itinerary" if they complement the vendor's plan.
     - If the vendor's itinerary is brief, missing days, or not strictly day-wise:
-        - You MUST expand upon it logically to cover all `{num_days}` days.
-        - For any missing days, creatively and plausibly generate activities based on the destination (`{destination}`), trip type (`{trip_type}`), and common tourist interests for such a trip. Make it sound like a coherent and well-planned experience.
+        - You MUST expand upon it logically to cover all `{num_days}` days. Use the "AI-Suggested Itinerary" as a strong guide for filling gaps or fleshing out days.
+        - For any missing days not covered by vendor or AI suggestions, creatively and plausibly generate activities based on the destination (`{destination}`), trip type (`{trip_type}`), and common tourist interests for such a trip.
         - Ensure a smooth flow between days.
 - **If the vendor reply provides NO itinerary details at all (check "Proposed Itinerary" in Parsed Vendor Information):**
-    - You MUST create a compelling, generic, day-wise itinerary for `{num_days}` days in `{destination}` suitable for a `{trip_type}` trip.
-    - In the description of "Day 1" for such a generated itinerary, include a note like: "(Please note: This is a suggested itinerary based on popular activities. We can customize it further to your preferences.)"
+    - **First Priority:** Use the "AI-Suggested Itinerary (from preliminary planning)" to construct a day-wise itinerary. If it's just a list of places, weave them into a logical daily plan covering `{num_days}`.
+    - **If AI-Suggested Itinerary is also minimal, unhelpful, or states "No AI-generated itinerary/suggestions available...":** Create a compelling, generic, day-wise itinerary for `{num_days}` days in `{destination}` suitable for a `{trip_type}` trip.
+    - When generating an itinerary primarily from AI suggestions or generically (i.e., not from a detailed vendor plan), include a note in the description of "Day 1" like: "(Please note: This is a suggested itinerary based on popular activities and initial suggestions. We can customize it further to your preferences.)"
 - **Beautification & Clarity:**
     - Use clear, professional, and engaging language throughout the itinerary descriptions.
     - Avoid jargon. Highlight key experiences.
@@ -81,6 +84,11 @@ Client Enquiry Details:
 - Trip Type: {trip_type}
 - Client Name (if available, use "Mr./Ms. [Client Name]", else "Mr./Ms. Valued Client"): {client_name_placeholder}
 
+AI-Suggested Itinerary (from preliminary planning - may be a list of places or descriptive text, or a note if none available):
+---
+{ai_suggested_itinerary_text}
+---
+
 Parsed Vendor Information (This contains what the vendor provided, including their proposed itinerary, meals, room configuration, pricing, etc.):
 ---
 {vendor_parsed_text}
@@ -98,23 +106,23 @@ Parsed Vendor Information (This contains what the vendor provided, including the
   "room_configuration_summary": "Standard double occupancy rooms (or as per final booking confirmation)",
   "vehicle_summary": "Comfortable Private AC Vehicle for all transfers and sightseeing as per itinerary",
   "main_image_placeholder_text": "A Glimpse of {destination}'s Charm",
-  
+
   "itinerary_title": "Your Personalized {num_days}-Day Journey in {destination}",
-  "detailed_itinerary": [ 
-    {{ 
-      "day_number": "Day 1", 
-      "title": "Arrival in {destination} & Evening at Leisure", 
+  "detailed_itinerary": [
+    {{
+      "day_number": "Day 1",
+      "title": "Arrival in {destination} & Evening at Leisure",
       "description": "Welcome to the vibrant city of {destination}! Upon your arrival at the international airport/railway station, our friendly representative will greet you and assist with a smooth transfer to your pre-booked hotel. Complete your check-in formalities and take some time to relax and settle in. The rest of the evening is yours to explore the nearby surroundings at your own pace, perhaps indulging in some local snacks or simply soaking in the new atmosphere. Enjoy a comfortable overnight stay at your hotel in {destination}."
-    }} 
+    }}
   ],
   "hotel_details": [
     {{ "destination_location": "{destination}", "hotel_name": "Selected 3-Star/4-Star Hotel (or similar, based on package)", "nights": "{num_nights}" }}
   ],
 
-  "cost_per_head": "To be advised based on final customization", 
+  "cost_per_head": "To be advised based on final customization",
   "total_pax_for_cost": "{traveler_count}",
   "total_package_cost": "Please refer to final proposal",
-  "currency": "INR", 
+  "currency": "INR",
 
   "inclusions": [
       "Accommodation as per room configuration summary in specified category hotels.",
@@ -131,10 +139,10 @@ Parsed Vendor Information (This contains what the vendor provided, including the
       "Personal expenses such as laundry, telephone calls, tips, porterage, etc.",
       "Any services not explicitly mentioned in the 'Inclusions' section."
     ],
-  
+
   "gst_note": "GST (Goods and Services Tax) will be applicable as per government norms, currently 5% on tour packages.",
   "tcs_note_short": "TCS may be applicable for overseas packages as per prevailing government regulations.",
-  
+
   "company_contact_person": "V.R.Viswanathan",
   "company_phone": "+91-8884016046",
   "company_email": "vrtravelpackages@gmail.com",
