@@ -50,16 +50,9 @@ def _reset_tab3_specific_data_on_selection_change():
     st.session_state.show_quotation_success_tab3 = False
 
 
-def render_tab3(QUOTATIONS_BUCKET_NAME_param: str): # Param remains for flexibility if needed outside constant
-    # QUOTATIONS_BUCKET_NAME = QUOTATIONS_BUCKET_NAME_param # Use param
-    # OR:
-    # from constants import BUCKET_QUOTATIONS # Use constant directly, param becomes redundant
-    # For this refactor, let's assume the param is the way it's passed, consistent with app.py
-    # However, if BUCKET_QUOTATIONS is always the same, importing from constants is cleaner.
-    # Let's stick to the existing param passing for now to minimize app.py changes.
-    # So, `tab3_actions` will import `BUCKET_QUOTATIONS` from `constants`
-    # and `tab3_ui_components` will receive it as a parameter if it needs it.
-
+def render_tab3(): 
+    """Render the UI for the 'Add Vendor Reply & Generate Quotation' tab."""
+    
     st.header("3. Add Vendor Reply & Generate Quotation")
 
     if st.session_state.get(SESSION_KEY_OPERATION_SUCCESS_MESSAGE):

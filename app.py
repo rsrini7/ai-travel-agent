@@ -12,8 +12,6 @@ from src.ui.tabs.tab3_vendor_quotation import render_tab3
 
 # Import sidebar rendering function
 from src.ui.sidebar import render_sidebar
-from src.utils.constants import BUCKET_QUOTATIONS
-
 
 st.set_page_config(layout="wide")
 st.title("🤖 AI-Powered Travel Agent Automation")
@@ -86,4 +84,4 @@ with tab2:
     render_tab2()
 
 with tab3:
-    render_tab3(QUOTATIONS_BUCKET_NAME_param=BUCKET_QUOTATIONS) # Pass constant
+    render_tab3()
