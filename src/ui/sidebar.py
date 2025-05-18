@@ -2,7 +2,6 @@ import streamlit as st
 import os
 
 # Define model options for providers that support multiple models via this UI
-# You can expand these lists
 PROVIDER_MODEL_OPTIONS = {
     "OpenRouter": [
         "google/gemma-3-27b-it:free",
@@ -18,28 +17,28 @@ PROVIDER_MODEL_OPTIONS = {
         "deepseek-r1-distill-llama-70b",
         "qwen-qwq-32b"
     ],
-    "Gemini": ["gemini-1.5-flash-latest"]
+    "Gemini": [ # Add a list of selectable Gemini models
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite"
+    ]
 }
 
 
 def render_sidebar():
     """
     Renders the global AI configuration sidebar.
-    Manages 'selected_ai_provider' and 'selected_model_for_provider' in st.session_state.
+    Manages 'selected_ai_provider' and 'selected_model_for_provider' in st.session_state.app_state.ai_config.
     """
     st.sidebar.subheader("⚙️ AI Configuration")
     ai_provider_options = ["Gemini", "OpenRouter", "Groq"]
-
-    # Session states are now initialized in app.py via AppSessionState
-    # Default values are handled by the Pydantic model.
 
     # --- Provider Selection ---
     current_provider_index = 0
     try:
         current_provider_index = ai_provider_options.index(st.session_state.app_state.ai_config.selected_ai_provider)
     except ValueError:
-        # This case should ideally not happen if default is set correctly in Pydantic model
-        st.session_state.app_state.ai_config.selected_ai_provider = "OpenRouter"
+        st.session_state.app_state.ai_config.selected_ai_provider = "OpenRouter" # Default if error
         current_provider_index = ai_provider_options.index("OpenRouter")
 
     selected_provider = st.sidebar.selectbox(
@@ -61,50 +60,57 @@ def render_sidebar():
     if active_provider in PROVIDER_MODEL_OPTIONS:
         available_models = PROVIDER_MODEL_OPTIONS[active_provider]
         
-        # Determine default model for the current provider
         default_model_env_var = ""
         if active_provider == "OpenRouter":
             default_model_env_var = os.getenv("OPENROUTER_DEFAULT_MODEL")
         elif active_provider == "Groq":
             default_model_env_var = os.getenv("GROQ_DEFAULT_MODEL")
+        elif active_provider == "Gemini": # Get default model for Gemini
+            default_model_env_var = os.getenv("GOOGLE_DEFAULT_MODEL")
 
-        # Use session state for selected model or fallback to env var or first in list
+
+        # Determine current model index for the selectbox
+        current_model_index = 0
+        # Try to use the model currently in session state if it's valid for the new provider
         if st.session_state.app_state.ai_config.selected_model_for_provider and \
            st.session_state.app_state.ai_config.selected_model_for_provider in available_models:
             current_model_index = available_models.index(st.session_state.app_state.ai_config.selected_model_for_provider)
+        # If not, try to use the default from environment variable
         elif default_model_env_var and default_model_env_var in available_models:
             current_model_index = available_models.index(default_model_env_var)
-            st.session_state.app_state.ai_config.selected_model_for_provider = default_model_env_var # Set session state
+            # Set session state if provider changed or model was None (first time selecting this provider)
+            if provider_changed or st.session_state.app_state.ai_config.selected_model_for_provider is None:
+                st.session_state.app_state.ai_config.selected_model_for_provider = default_model_env_var
+        # If still no valid model, use the first one from the available_models list
         elif available_models:
             current_model_index = 0
-            st.session_state.app_state.ai_config.selected_model_for_provider = available_models[0] # Set session state
-        else: # Should not happen if PROVIDER_MODEL_OPTIONS is well-defined
+            if provider_changed or st.session_state.app_state.ai_config.selected_model_for_provider is None:
+                st.session_state.app_state.ai_config.selected_model_for_provider = available_models[0]
+        # If no models are available at all (should not happen with current setup)
+        else:
             current_model_index = 0
             st.session_state.app_state.ai_config.selected_model_for_provider = None
 
 
-        selected_model = st.sidebar.selectbox(
+        selected_model_from_widget = st.sidebar.selectbox(
             f"Select Model for {active_provider}:",
             options=available_models,
             index=current_model_index,
             key=model_selection_key
         )
-        if selected_model != st.session_state.app_state.ai_config.selected_model_for_provider:
-            st.session_state.app_state.ai_config.selected_model_for_provider = selected_model
-            # No st.rerun() needed here typically, as the change will be picked up on next LLM call.
-            # However, if other UI elements depend on this immediately, a rerun might be desired.
-            # For this use case, it's generally fine.
-
-    else: # For providers like Gemini that have a fixed model in this app
-        st.session_state.app_state.ai_config.selected_model_for_provider = None # No specific model selection
+        if selected_model_from_widget != st.session_state.app_state.ai_config.selected_model_for_provider:
+            st.session_state.app_state.ai_config.selected_model_for_provider = selected_model_from_widget
+            # Rerun if the model itself changes to ensure consistency in display or dependent logic.
+            st.rerun() 
+    
+    else: # Should not be reached if all providers in ai_provider_options have an entry in PROVIDER_MODEL_OPTIONS
+        st.session_state.app_state.ai_config.selected_model_for_provider = None
 
     # --- Display Current Configuration ---
     st.sidebar.caption(f"Using Provider: {st.session_state.app_state.ai_config.selected_ai_provider}")
-    if st.session_state.app_state.ai_config.selected_ai_provider == "Gemini":
-        st.sidebar.caption(f"Gemini Model: {st.session_state.app_state.ai_config.selected_model_for_provider}")
-    elif st.session_state.app_state.ai_config.selected_model_for_provider:
+    if st.session_state.app_state.ai_config.selected_model_for_provider:
         st.sidebar.caption(f"Using Model: {st.session_state.app_state.ai_config.selected_model_for_provider}")
     
-    # Rerun if provider changed to update the model dropdown correctly
+    # Rerun if provider changed to update the model dropdown/display correctly
     if provider_changed:
         st.rerun()

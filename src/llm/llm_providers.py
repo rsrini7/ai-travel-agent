@@ -16,20 +16,19 @@ def get_llm_instance(provider: str):
         model_for_api_call = st.session_state.app_state.ai_config.selected_model_for_provider
         
         # Fallback if session state isn't populated (e.g. very first script run before sidebar effect).
-        # The sidebar should quickly align this on its first pass.
         if not model_for_api_call: 
             model_for_api_call = os.getenv("GOOGLE_DEFAULT_MODEL", "gemini-1.5-flash-latest")
         
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found for Gemini. Check .env file.")
         
-        # Add a print statement for clarity, similar to other providers
         print(f"LLM_PROVIDERS.PY: Initializing Gemini with model: {model_for_api_call}")
 
         return ChatGoogleGenerativeAI(
             model=model_for_api_call,
             google_api_key=api_key,
-            request_options={"timeout": 120}
+            # Pass request_options via model_kwargs
+            model_kwargs={"request_options": {"timeout": 120}} 
         )
     elif provider == "OpenRouter":
         api_key = os.getenv("OPENROUTER_API_KEY")

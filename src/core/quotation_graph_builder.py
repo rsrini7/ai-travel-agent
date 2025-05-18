@@ -2,6 +2,7 @@
 import os
 import json
 import re 
+import streamlit as st # Added for accessing session state
 from typing import TypedDict, Dict, Any
 
 from langgraph.graph import StateGraph, END
@@ -136,15 +137,22 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
     raw_llm_output_for_error = "" # Capture LLM's raw string output if parsing fails
     
     try:
-        llm = get_llm_instance(provider)
+        # Note: get_llm_instance uses st.session_state internally to get the selected model for the provider
+        llm = get_llm_instance(provider) 
+        
         num_days_int = int(enquiry.get("num_days", 0))
         num_nights = num_days_int - 1 if num_days_int > 0 else 0
         json_prompt_str = QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
 
         # Configure LLM for JSON output or string output based on provider
-        if provider == "OpenRouter" and ("gpt" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower() or \
-                                         "claude-3" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower()):
-            llm_for_json = get_llm_instance(provider) # Re-get to ensure clean model_kwargs
+        # The llm instance already has the correct model_name from st.session_state
+        current_model_name = st.session_state.app_state.ai_config.selected_model_for_provider or "" # Get selected model
+
+        if provider == "OpenRouter" and ("gpt" in current_model_name.lower() or \
+                                         "claude-3" in current_model_name.lower()):
+            # Re-get instance to cleanly set model_kwargs, as get_llm_instance
+            # correctly picks the user-selected model from session state.
+            llm_for_json = get_llm_instance(provider) 
             if not hasattr(llm_for_json, 'model_kwargs') or llm_for_json.model_kwargs is None:
                 llm_for_json.model_kwargs = {}
             llm_for_json.model_kwargs["response_format"] = {"type": "json_object"}
@@ -193,7 +201,7 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         else:
             raise TypeError(f"Unexpected LLM output type for JSON: {type(response_data)}")
 
-        # --- Data sanitization (no changes here) ---
+        # --- Data sanitization ---
         for key_list in ["inclusions", "exclusions", "standard_exclusions_list", "important_notes"]:
             if key_list in structured_data_payload and isinstance(structured_data_payload[key_list], list):
                 structured_data_payload[key_list] = [str(item) for item in structured_data_payload[key_list]]
@@ -272,7 +280,7 @@ def generate_pdf_node(state: QuotationGenerationState):
         pdf.multi_cell(0, 7, text_to_write)
         return {"pdf_output_bytes": bytes(pdf.output(dest='S'))}
 
-# Workflow definition (no changes)
+# Workflow definition
 workflow = StateGraph(QuotationGenerationState)
 workflow.add_node("fetch_enquiry_and_vendor_reply", fetch_data_node)
 workflow.add_node("parse_vendor_text", parse_vendor_reply_node)
