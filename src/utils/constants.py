@@ -32,21 +32,3 @@ TABLE_QUOTATIONS = "quotations"
 
 # Storage Bucket Names
 BUCKET_QUOTATIONS = "quotations"
-
-
-# --- UI & Session State Keys (examples, can be expanded) ---
-SESSION_KEY_SELECTED_AI_PROVIDER = "selected_ai_provider"
-SESSION_KEY_SELECTED_MODEL_FOR_PROVIDER = "selected_model_for_provider"
-
-# Tab 2
-SESSION_KEY_TAB2_SELECTED_ENQUIRY_ID = "selected_enquiry_id"
-SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS = "current_ai_suggestions"
-SESSION_KEY_TAB2_CURRENT_AI_SUGGESTIONS_ID = "current_ai_suggestions_id"
-SESSION_KEY_TAB2_ITINERARY_LOADED_FLAG = "itinerary_loaded_for_tab2"
-
-# Tab 3
-SESSION_KEY_TAB3_SELECTED_ENQUIRY_ID = "selected_enquiry_id_tab3"
-# Add other tab3 specific session keys here if centralizing them is desired
-
-# General
-SESSION_KEY_OPERATION_SUCCESS_MESSAGE = "operation_success_message"

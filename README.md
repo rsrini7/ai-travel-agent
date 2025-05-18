@@ -55,6 +55,10 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 ├── app.py                      # Main Streamlit application entry point
 ├── requirements.txt            # Python dependencies
 ├── .env.example               # Environment variable template
+├── .python-version            # Python version specification
+├── schema.sql                 # Database schema
+├── schema-drop.sql            # Database schema drop script
+├── storage.sql                # Storage configuration
 │
 ├── assets/                   # Static assets
 │   ├── fonts/                # Custom fonts for PDF generation
@@ -66,6 +70,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 │
 ├── src/                     # Source code package
 │   ├── __init__.py          # Package initialization
+│   ├── models.py            # Data models
 │   │
 │   ├── core/              # Core business logic
 │   │   ├── __init__.py
@@ -98,11 +103,8 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 │       ├── constants.py      # Application constants
 │       ├── docx_utils.py     # PDF to DOCX conversion
 │       ├── pdf_utils.py      # PDF generation logic
-│       └── supabase_utils.py # Database and storage utilities
-│
-├── schema.sql              # Database schema (tables)
-├── schema-drop.sql         # Script to drop database tables
-└── storage.sql             # Supabase Storage bucket policies
+│       └── supabase_utils.py # Supabase integration utilities
+.
 ```
 
 ---

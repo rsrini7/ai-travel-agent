@@ -4,22 +4,22 @@ from src.utils.constants import BUCKET_QUOTATIONS
 
 def display_enquiry_and_itinerary_details_tab3(active_enquiry_id_tab3):
     """Displays selected enquiry details and AI-generated itinerary."""
-    if st.session_state.tab3_enquiry_details:
-        st.subheader(f"Working with Enquiry for {st.session_state.tab3_client_name}: {st.session_state.tab3_enquiry_details['destination']} (ID: {active_enquiry_id_tab3[:8]}...)")
+    if st.session_state.app_state.tab3_state.enquiry_details:
+        st.subheader(f"Working with Enquiry for {st.session_state.app_state.tab3_state.client_name}: {st.session_state.app_state.tab3_state.enquiry_details['destination']} (ID: {active_enquiry_id_tab3[:8]}...)")
         cols_details_tab3 = st.columns(2)
         with cols_details_tab3[0]:
             st.markdown(f"""
-                - **Destination:** {st.session_state.tab3_enquiry_details['destination']}
-                - **Days:** {st.session_state.tab3_enquiry_details['num_days']}
-                - **Travelers:** {st.session_state.tab3_enquiry_details['traveler_count']}
+                - **Destination:** {st.session_state.app_state.tab3_state.enquiry_details['destination']}
+                - **Days:** {st.session_state.app_state.tab3_state.enquiry_details['num_days']}
+                - **Travelers:** {st.session_state.app_state.tab3_state.enquiry_details['traveler_count']}
             """)
         with cols_details_tab3[1]:
             st.markdown(f"""
-                - **Trip Type:** {st.session_state.tab3_enquiry_details['trip_type']}
-                - **Status:** {st.session_state.tab3_enquiry_details.get('status', 'New')}
+                - **Trip Type:** {st.session_state.app_state.tab3_state.enquiry_details['trip_type']}
+                - **Status:** {st.session_state.app_state.tab3_state.enquiry_details.get('status', 'New')}
             """)
 
-        itinerary_display_text_tab3 = st.session_state.tab3_itinerary_info.get('text', "No itinerary information.")
+        itinerary_display_text_tab3 = st.session_state.app_state.tab3_state.itinerary_info.get('text', "No itinerary information.") if st.session_state.app_state.tab3_state.itinerary_info else "No itinerary information."
         if "No AI-generated itinerary/suggestions available" not in itinerary_display_text_tab3:
             with st.expander("View AI Generated Itinerary/Suggestions (from Tab 2)", expanded=False):
                 st.markdown(itinerary_display_text_tab3)
@@ -33,7 +33,7 @@ def render_vendor_reply_section(active_enquiry_id_tab3, handle_vendor_reply_subm
     """Renders the vendor reply input/display form and calls the submit handler."""
     st.markdown("---")
     st.subheader("✍️ Add/View Vendor Reply")
-    current_vendor_reply_text_for_form = st.session_state.tab3_vendor_reply_info.get('text', "") if st.session_state.tab3_vendor_reply_info else ""
+    current_vendor_reply_text_for_form = st.session_state.app_state.tab3_state.vendor_reply_info.get('text', "") if st.session_state.app_state.tab3_state.vendor_reply_info else ""
 
     if current_vendor_reply_text_for_form:
         with st.expander("View Current Vendor Reply", expanded=False):
@@ -52,12 +52,12 @@ def render_vendor_reply_section(active_enquiry_id_tab3, handle_vendor_reply_subm
 def render_quotation_generation_section(active_enquiry_id_tab3, handle_pdf_generation_func, handle_docx_generation_func, current_graph_cache_key):
     """Renders the quotation generation buttons and calls their respective handlers."""
     st.markdown("---")
-    st.subheader(f"📄 AI Quotation Generation (using {st.session_state.selected_ai_provider})")
-    vendor_reply_available = st.session_state.tab3_vendor_reply_info and st.session_state.tab3_vendor_reply_info.get('text')
+    st.subheader(f"📄 AI Quotation Generation (using {st.session_state.app_state.ai_config.selected_ai_provider})")
+    vendor_reply_available = st.session_state.app_state.tab3_state.vendor_reply_info and st.session_state.app_state.tab3_state.vendor_reply_info.get('text')
 
     if not vendor_reply_available:
         st.warning("A vendor reply is required to generate quotations.")
-    generate_quotation_disabled = not (vendor_reply_available and st.session_state.tab3_enquiry_details)
+    generate_quotation_disabled = not (vendor_reply_available and st.session_state.app_state.tab3_state.enquiry_details)
 
     col1_gen, col2_gen = st.columns(2)
     with col1_gen:
@@ -78,7 +78,7 @@ def display_quotation_files_section(active_enquiry_id_tab3):
 
     with dl_col1_show:
         st.markdown("**PDF Document**")
-        pdf_path_to_show = st.session_state.get('tab3_current_pdf_storage_path')
+        pdf_path_to_show = st.session_state.app_state.tab3_state.current_pdf_storage_path
         if pdf_path_to_show:
             has_any_file_info = True
             pdf_public_url = get_public_url(BUCKET_QUOTATIONS, pdf_path_to_show)
@@ -93,17 +93,17 @@ def display_quotation_files_section(active_enquiry_id_tab3):
         else:
             st.caption("No PDF stored for latest quotation.")
 
-        if st.session_state.get('tab3_quotation_pdf_bytes'):
+        if st.session_state.app_state.tab3_state.quotation_pdf_bytes:
             has_any_file_info = True
             st.download_button(
-                label="Download Locally Generated PDF", data=st.session_state.tab3_quotation_pdf_bytes,
-                file_name=f"Local_PDF_{st.session_state.tab3_enquiry_details.get('destination','Q')}_{active_enquiry_id_tab3[:4]}.pdf",
+                label="Download Locally Generated PDF", data=st.session_state.app_state.tab3_state.quotation_pdf_bytes,
+                file_name=f"Local_PDF_{st.session_state.app_state.tab3_state.enquiry_details.get('destination','Q') if st.session_state.app_state.tab3_state.enquiry_details else 'Q'}_{active_enquiry_id_tab3[:4]}.pdf",
                 mime="application/pdf", key="local_dl_pdf_tab3"
             )
 
     with dl_col2_show:
         st.markdown("**DOCX Document**")
-        docx_path_to_show = st.session_state.get('tab3_current_docx_storage_path')
+        docx_path_to_show = st.session_state.app_state.tab3_state.current_docx_storage_path
         if docx_path_to_show:
             has_any_file_info = True
             docx_public_url = get_public_url(BUCKET_QUOTATIONS, docx_path_to_show)
@@ -118,13 +118,13 @@ def display_quotation_files_section(active_enquiry_id_tab3):
         else:
             st.caption("No DOCX stored for latest quotation.")
 
-        if st.session_state.get('tab3_quotation_docx_bytes'):
+        if st.session_state.app_state.tab3_state.quotation_docx_bytes:
             has_any_file_info = True
             st.download_button(
-                label="Download Locally Generated DOCX", data=st.session_state.tab3_quotation_docx_bytes,
-                file_name=f"Local_DOCX_{st.session_state.tab3_enquiry_details.get('destination','Q')}_{active_enquiry_id_tab3[:4]}.docx",
+                label="Download Locally Generated DOCX", data=st.session_state.app_state.tab3_state.quotation_docx_bytes,
+                file_name=f"Local_DOCX_{st.session_state.app_state.tab3_state.enquiry_details.get('destination','Q') if st.session_state.app_state.tab3_state.enquiry_details else 'Q'}_{active_enquiry_id_tab3[:4]}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="local_dl_docx_tab3"
             )
 
-    if not has_any_file_info and not st.session_state.get('tab3_quotation_pdf_bytes') and not st.session_state.get('tab3_quotation_docx_bytes'):
+    if not has_any_file_info and not st.session_state.app_state.tab3_state.quotation_pdf_bytes and not st.session_state.app_state.tab3_state.quotation_docx_bytes:
         st.info("No quotation files available. Use 'Generate' buttons to create them.")

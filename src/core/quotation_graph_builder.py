@@ -2,6 +2,7 @@
 import os
 import json
 import re 
+import streamlit as st # Added for accessing session state
 from typing import TypedDict, Dict, Any
 
 from langgraph.graph import StateGraph, END
@@ -17,6 +18,22 @@ from src.llm.llm_prompts import (
 )
 from src.utils.pdf_utils import create_pdf_quotation_bytes
 from fpdf import FPDF
+
+# --- Helper Function for Error Message Extraction ---
+def _extract_error_message_from_payload(payload: Any) -> str | None:
+    """Helper to extract a user-friendly error message from common error structures."""
+    if isinstance(payload, dict):
+        if "error" in payload:
+            error_content = payload["error"]
+            if isinstance(error_content, dict) and "message" in error_content:
+                return error_content["message"]
+            elif isinstance(error_content, str): # Sometimes error is just a string
+                return error_content
+        elif "message" in payload: # Another common pattern
+            return payload["message"]
+    elif isinstance(payload, str): # If the payload itself is a string error
+        return payload
+    return None
 
 def create_error_pdf_instance():
     pdf = FPDF()
@@ -68,7 +85,7 @@ def parse_vendor_reply_node(state: QuotationGenerationState):
     vendor_reply = state["vendor_reply_text"]
     enquiry_details = state["enquiry_details"]
     provider = state["ai_provider"]
-    error_payload = None
+    error_payload = None # This will hold the final error dict for the state
     parsed_info_str = ""
 
     try:
@@ -82,32 +99,97 @@ def parse_vendor_reply_node(state: QuotationGenerationState):
             "num_days": enquiry_details.get("num_days")
         })
     except ValueError as ve: 
-        error_msg = f"LLM Configuration Error ({provider}) during vendor reply parsing: {ve}"
-        print(error_msg)
-        error_payload = {"message": error_msg, "details": str(ve), "type": "ConfigurationError"}
+        user_message = f"LLM Configuration Error ({provider}) during vendor reply parsing: {ve}"
+        print(user_message)
+        error_payload = {"message": user_message, "details": str(ve), "type": "ConfigurationError", "raw_response": None, "status_code": None}
     except httpx.HTTPStatusError as hse:
-        raw_response = hse.response.text
-        try: raw_response = hse.response.json() # Attempt to get more details
-        except: pass
-        error_msg = f"LLM HTTP Error ({provider}, Status {hse.response.status_code}) during vendor reply parsing."
-        print(f"{error_msg}. Response: {raw_response}")
+        raw_response_str = hse.response.text
+        user_message = f"The AI service ({provider}) returned an HTTP error (Status: {hse.response.status_code}) during vendor reply parsing."
+        provider_extracted_message = raw_response_str # Default
+        try:
+            raw_json = hse.response.json()
+            msg_from_payload = _extract_error_message_from_payload(raw_json)
+            if msg_from_payload:
+                provider_extracted_message = msg_from_payload
+                user_message = f"The AI service ({provider}) reported (Status {hse.response.status_code}): {provider_extracted_message}"
+        except json.JSONDecodeError:
+            pass # Keep raw string as provider_extracted_message
+        
+        print(f"GraphNode: HTTPStatusError (vendor reply, {provider}) - UserMsg: {user_message}, Raw: {raw_response_str}")
         error_payload = {
-            "message": error_msg,
-            "details": f"Provider message: {str(raw_response)}",
-            "raw_response": str(raw_response), "type": "HttpError", "status_code": hse.response.status_code
+            "message": user_message,
+            "details": f"Full details: {raw_response_str}",
+            "raw_response": raw_response_str, 
+            "type": "HttpError", 
+            "status_code": hse.response.status_code
         }
-    except OutputParserException as ope: # Should be rare for StrOutputParser
-        error_msg = f"LLM Output Parsing Error ({provider}) during vendor reply: {ope}"
-        print(error_msg)
-        error_payload = {"message": error_msg, "details": str(ope), "type": "OutputParsingError"}
+    except OutputParserException as ope:
+        user_message = f"LLM Output Parsing Error ({provider}) during vendor reply: {ope}"
+        print(user_message)
+        error_payload = {"message": user_message, "details": str(ope), "type": "OutputParsingError", "raw_response": None, "status_code": None}
     except LangChainException as lce:
-        error_msg = f"LangChain Error ({provider}) parsing vendor reply: {lce}"
-        print(error_msg)
-        error_payload = {"message": error_msg, "details": str(lce), "type": "LangChainException"}
+        user_message = f"An AI processing error occurred with {provider} during vendor reply parsing."
+        details_for_log = str(lce)
+        error_type_for_log = "LangChainException"
+        status_code_for_log = None
+        raw_response_for_log = None
+
+        if hasattr(lce, 'args') and lce.args:
+            arg0 = lce.args[0]
+            if isinstance(arg0, str):
+                try:
+                    if "status_code=" in arg0 and "response=" in arg0:
+                        status_match = re.search(r"status_code=(\d+)", arg0)
+                        if status_match: status_code_for_log = int(status_match.group(1))
+                        
+                        json_start_index = arg0.find("b'{") # Works for b'{"..."}'
+                        if json_start_index == -1 : json_start_index = arg0.find("response='{") # Works for response='{"..."}'
+                        if json_start_index != -1 :
+                            # Adjust based on actual prefix (b' or response=')
+                            prefix_len = 2 if arg0[json_start_index:json_start_index+2] == "b'" else len("response='")
+                            
+                            # Find the end of the JSON-like string
+                            # This is heuristic, might need refinement for complex escaped strings
+                            temp_str = arg0[json_start_index + prefix_len:]
+                            balance = 0
+                            end_json_index = -1
+                            for i, char in enumerate(temp_str):
+                                if char == '{': balance +=1
+                                elif char == '}': balance -=1
+                                if balance == 0 and char == '}': # found the end of the main JSON object
+                                    end_json_index = i
+                                    break
+                            if end_json_index != -1:
+                                json_like_str = temp_str[:end_json_index+1]
+                                json_like_str = json_like_str.replace("\\'", "'") # Simple unescape for internal quotes
+                                
+                                error_payload_dict = json.loads(json_like_str)
+                                raw_response_for_log = json.dumps(error_payload_dict)
+                                extracted_provider_msg = _extract_error_message_from_payload(error_payload_dict)
+                                if extracted_provider_msg:
+                                    user_message = f"The AI service ({provider}) reported: {extracted_provider_msg}"
+                                    details_for_log = json.dumps(error_payload_dict)
+                                    error_type_for_log = "ProviderAPIError"
+                except (json.JSONDecodeError, IndexError, TypeError, re.error) as parse_err:
+                    print(f"QuotationGraphBuilder: Could not parse detailed error from LangChainException args (vendor reply): {parse_err}")
+                details_for_log = arg0 # Fallback if parsing fails
+            elif isinstance(arg0, dict):
+                raw_response_for_log = json.dumps(arg0)
+                extracted_provider_msg = _extract_error_message_from_payload(arg0)
+                if extracted_provider_msg:
+                    user_message = f"The AI service ({provider}) reported: {extracted_provider_msg}"
+                    details_for_log = json.dumps(arg0)
+                    error_type_for_log = "ProviderAPIError"
+        
+        print(f"GraphNode: LangChainExc (vendor reply, {provider}) - UserMsg: {user_message}, Details: {details_for_log}")
+        error_payload = {
+            "message": user_message, "details": details_for_log, "raw_response": raw_response_for_log,
+            "type": error_type_for_log, "status_code": status_code_for_log
+        }
     except Exception as e:
-        error_msg = f"Unexpected Error ({provider}) parsing vendor reply: {e}"
-        print(error_msg)
-        error_payload = {"message": error_msg, "details": str(e), "type": "GenericError"}
+        user_message = f"Unexpected Error ({provider}) parsing vendor reply: {e}"
+        print(user_message)
+        error_payload = {"message": user_message, "details": str(e), "type": "GenericError", "raw_response": None, "status_code": None}
     
     if error_payload:
         return {"parsed_vendor_info_text": f"Error: {error_payload['message']}", "parsed_vendor_info_error": error_payload}
@@ -123,8 +205,8 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
         return {"structured_quotation_data": {
             "error": err_msg,
             "details": error_info.get('details'),
-            "raw_output": error_info.get('raw_response'), # Propagate raw output if any
-            "type": "UpstreamError" # Indicate the error source
+            "raw_output": error_info.get('raw_response'),
+            "type": "UpstreamError"
         }}
 
     enquiry = state["enquiry_details"]
@@ -132,19 +214,19 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
     ai_suggested_itinerary_text = state["ai_suggested_itinerary_text"]
     provider = state["ai_provider"]
     
-    structured_data_payload = {} # Will hold the final JSON or an error structure
-    raw_llm_output_for_error = "" # Capture LLM's raw string output if parsing fails
+    structured_data_payload = {} 
+    raw_llm_output_for_error = ""
     
     try:
         llm = get_llm_instance(provider)
         num_days_int = int(enquiry.get("num_days", 0))
         num_nights = num_days_int - 1 if num_days_int > 0 else 0
         json_prompt_str = QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
+        current_model_name = st.session_state.app_state.ai_config.selected_model_for_provider or ""
 
-        # Configure LLM for JSON output or string output based on provider
-        if provider == "OpenRouter" and ("gpt" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower() or \
-                                         "claude-3" in os.getenv("OPENROUTER_DEFAULT_MODEL", "").lower()):
-            llm_for_json = get_llm_instance(provider) # Re-get to ensure clean model_kwargs
+        if provider == "OpenRouter" and ("gpt" in current_model_name.lower() or \
+                                         "claude-3" in current_model_name.lower()):
+            llm_for_json = get_llm_instance(provider) 
             if not hasattr(llm_for_json, 'model_kwargs') or llm_for_json.model_kwargs is None:
                 llm_for_json.model_kwargs = {}
             llm_for_json.model_kwargs["response_format"] = {"type": "json_object"}
@@ -154,7 +236,7 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
             updated_json_prompt_str = json_prompt_str.replace("```json", "Please provide your response strictly in the following JSON format, ensuring all strings are correctly escaped:\n```json")
             prompt = ChatPromptTemplate.from_template(updated_json_prompt_str)
             chain = prompt | llm | StrOutputParser() 
-        else: # Groq and other OpenRouter models
+        else: 
             prompt = ChatPromptTemplate.from_template(json_prompt_str)
             chain = prompt | llm | StrOutputParser()
 
@@ -169,12 +251,11 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
             "vendor_parsed_text": vendor_parsed_text
         })
 
-        # Parse response_data to JSON
         if isinstance(response_data, str):
             raw_llm_output_for_error = response_data
             match = re.search(r"```json\s*(\{.*?\})\s*```", response_data, re.DOTALL)
             if match: potential_json_str = match.group(1)
-            else: # Fallback robust extraction
+            else: 
                 cleaned_response = response_data.strip()
                 json_start_index = cleaned_response.find('{')
                 if json_start_index == -1: raise json.JSONDecodeError("No JSON object found.", cleaned_response, 0)
@@ -187,13 +268,12 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
                 if json_end_index == -1: raise json.JSONDecodeError("Incomplete JSON object.", cleaned_response, 0)
                 potential_json_str = cleaned_response[json_start_index : json_end_index + 1]
             structured_data_payload = json.loads(potential_json_str)
-        elif isinstance(response_data, dict): # JsonOutputParser succeeded
+        elif isinstance(response_data, dict): 
             structured_data_payload = response_data
-            raw_llm_output_for_error = json.dumps(response_data, indent=2) # For potential error reporting
+            raw_llm_output_for_error = json.dumps(response_data, indent=2)
         else:
             raise TypeError(f"Unexpected LLM output type for JSON: {type(response_data)}")
 
-        # --- Data sanitization (no changes here) ---
         for key_list in ["inclusions", "exclusions", "standard_exclusions_list", "important_notes"]:
             if key_list in structured_data_payload and isinstance(structured_data_payload[key_list], list):
                 structured_data_payload[key_list] = [str(item) for item in structured_data_payload[key_list]]
@@ -205,34 +285,86 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
             for item in structured_data_payload["hotel_details"]:
                 if isinstance(item, dict):
                     for k,v in item.items(): item[k] = str(v)
-        # --- End sanitization ---
 
     except ValueError as ve: 
-        err_msg = f"LLM Configuration Error ({provider}) during JSON structuring: {ve}"
-        print(err_msg)
-        structured_data_payload = {"error": err_msg, "details": str(ve), "type": "ConfigurationError", "raw_output": raw_llm_output_for_error}
+        user_message = f"LLM Configuration Error ({provider}) during JSON structuring: {ve}"
+        print(user_message)
+        structured_data_payload = {"error": user_message, "details": str(ve), "type": "ConfigurationError", "raw_output": raw_llm_output_for_error, "status_code": None}
     except httpx.HTTPStatusError as hse:
-        if not raw_llm_output_for_error: raw_llm_output_for_error = hse.response.text # Capture raw if not already set
-        try: raw_llm_output_for_error = hse.response.json()
-        except: pass
-        err_msg = f"LLM HTTP Error ({provider}, Status {hse.response.status_code}) during JSON structuring."
-        print(f"{err_msg}. Response: {raw_llm_output_for_error}")
+        raw_response_str = hse.response.text
+        if not raw_llm_output_for_error: raw_llm_output_for_error = raw_response_str
+        user_message = f"The AI service ({provider}) returned an HTTP error (Status: {hse.response.status_code}) during JSON structuring."
+        provider_extracted_message = raw_response_str
+        try:
+            raw_json = hse.response.json()
+            msg_from_payload = _extract_error_message_from_payload(raw_json)
+            if msg_from_payload:
+                provider_extracted_message = msg_from_payload
+                user_message = f"The AI service ({provider}) reported (Status {hse.response.status_code}): {provider_extracted_message}"
+        except json.JSONDecodeError:
+            pass
+        print(f"GraphNode: HTTPStatusError (JSON structuring, {provider}) - UserMsg: {user_message}, Raw: {raw_response_str}")
         structured_data_payload = {
-            "error": err_msg, "details": f"Provider message: {str(raw_llm_output_for_error)}", 
-            "raw_output": str(raw_llm_output_for_error), "type": "HttpError", "status_code": hse.response.status_code
+            "error": user_message, "details": f"Full details: {raw_response_str}", 
+            "raw_output": raw_response_str, "type": "HttpError", "status_code": hse.response.status_code
         }
     except (json.JSONDecodeError, OutputParserException) as jpe:
-        err_msg = f"LLM JSON Parsing Error ({provider}): {jpe}. Preview: '{str(raw_llm_output_for_error)[:200]}...'"
-        print(err_msg)
-        structured_data_payload = {"error": err_msg, "details": str(jpe), "raw_output": raw_llm_output_for_error, "type": "JsonParsingError"}
+        user_message = f"LLM JSON Parsing Error ({provider}): {jpe}. Preview: '{str(raw_llm_output_for_error)[:200]}...'"
+        print(user_message)
+        structured_data_payload = {"error": user_message, "details": str(jpe), "raw_output": raw_llm_output_for_error, "type": "JsonParsingError", "status_code": None}
     except LangChainException as lce:
-        err_msg = f"LangChain Error ({provider}) during JSON structuring: {lce}"
-        print(err_msg)
-        structured_data_payload = {"error": err_msg, "details": str(lce), "raw_output": raw_llm_output_for_error, "type": "LangChainException"}
+        user_message = f"An AI processing error occurred with {provider} during JSON structuring."
+        details_for_log = str(lce)
+        error_type_for_log = "LangChainException"
+        status_code_for_log = None
+        # raw_llm_output_for_error will be used as raw_response_for_log if populated
+
+        if hasattr(lce, 'args') and lce.args:
+            arg0 = lce.args[0]
+            if isinstance(arg0, str):
+                try:
+                    if "status_code=" in arg0 and "response=" in arg0: # Check for LangChain's wrapped httpx error string
+                        status_match = re.search(r"status_code=(\d+)", arg0)
+                        if status_match: status_code_for_log = int(status_match.group(1))
+                        json_start_index = arg0.find("b'{")
+                        if json_start_index == -1 : json_start_index = arg0.find("response='{")
+                        if json_start_index != -1 :
+                            prefix_len = 2 if arg0[json_start_index:json_start_index+2] == "b'" else len("response='")
+                            temp_str = arg0[json_start_index + prefix_len:]
+                            balance = 0; end_json_index = -1
+                            for i, char in enumerate(temp_str):
+                                if char == '{': balance +=1
+                                elif char == '}': balance -=1
+                                if balance == 0 and char == '}': end_json_index = i; break
+                            if end_json_index != -1:
+                                json_like_str = temp_str[:end_json_index+1].replace("\\'", "'")
+                                error_payload_dict = json.loads(json_like_str)
+                                if not raw_llm_output_for_error: raw_llm_output_for_error = json.dumps(error_payload_dict) # Capture this as raw if not already set
+                                extracted_provider_msg = _extract_error_message_from_payload(error_payload_dict)
+                                if extracted_provider_msg:
+                                    user_message = f"The AI service ({provider}) reported: {extracted_provider_msg}"
+                                    details_for_log = json.dumps(error_payload_dict)
+                                    error_type_for_log = "ProviderAPIError"
+                except (json.JSONDecodeError, IndexError, TypeError, re.error) as parse_err:
+                    print(f"QuotationGraphBuilder: Could not parse detailed error from LangChainException args (JSON structuring): {parse_err}")
+                if details_for_log == str(lce) : details_for_log = arg0 # If not updated by parsing, use arg0
+            elif isinstance(arg0, dict):
+                if not raw_llm_output_for_error: raw_llm_output_for_error = json.dumps(arg0)
+                extracted_provider_msg = _extract_error_message_from_payload(arg0)
+                if extracted_provider_msg:
+                    user_message = f"The AI service ({provider}) reported: {extracted_provider_msg}"
+                    details_for_log = json.dumps(arg0)
+                    error_type_for_log = "ProviderAPIError"
+        
+        print(f"GraphNode: LangChainExc (JSON structuring, {provider}) - UserMsg: {user_message}, Details: {details_for_log}")
+        structured_data_payload = {
+            "error": user_message, "details": details_for_log, "raw_output": raw_llm_output_for_error,
+            "type": error_type_for_log, "status_code": status_code_for_log
+        }
     except Exception as e:
-        err_msg = f"Unexpected Error ({provider}) during JSON structuring: {type(e).__name__} - {e}"
-        print(err_msg)
-        structured_data_payload = {"error": err_msg, "details": str(e), "raw_output": raw_llm_output_for_error, "type": "GenericError"}
+        user_message = f"Unexpected Error ({provider}) during JSON structuring: {type(e).__name__} - {e}"
+        print(user_message)
+        structured_data_payload = {"error": user_message, "details": str(e), "raw_output": raw_llm_output_for_error, "type": "GenericError", "status_code": None}
     
     return {"structured_quotation_data": structured_data_payload}
 
@@ -250,21 +382,22 @@ def generate_pdf_node(state: QuotationGenerationState):
         pdf, dejavu_loaded = create_error_pdf_instance()
         title = "Quotation Generation Failed"
         if error_type == "UpstreamError": title = "Quotation Generation Failed: Data Parsing Error"
-        elif error_type in ["ConfigurationError", "HttpError", "LangChainException", "JsonParsingError"]: title = f"Quotation Generation Failed: AI ({state.get('ai_provider')}) Error"
+        elif error_type in ["ConfigurationError", "HttpError", "LangChainException", "JsonParsingError", "ProviderAPIError"]: 
+            title = f"Quotation Generation Failed: AI ({state.get('ai_provider')}) Error"
 
         text_to_write = f"{title}\n\nIssue: {error_message}"
-        if error_details: text_to_write += f"\nDetails: {error_details}"
-        if raw_output and raw_output != "N/A":
+        if error_details and error_details != error_message : text_to_write += f"\nDetails: {error_details}"
+        if raw_output and raw_output != "N/A" and isinstance(raw_output, str) and len(raw_output.strip()) > 0:
             text_to_write += f"\n\nTechnical Information (e.g., AI Raw Output):\n{str(raw_output)[:1000]}"
         
         if not dejavu_loaded: text_to_write = sanitize_for_standard_font(text_to_write)
-        pdf.multi_cell(0, 7, text_to_write) # Reduced line height for potentially more text
+        pdf.multi_cell(0, 7, text_to_write)
         return {"pdf_output_bytes": bytes(pdf.output(dest='S'))}
     
     try:
         pdf_bytes = create_pdf_quotation_bytes(structured_data)
         return {"pdf_output_bytes": pdf_bytes}
-    except Exception as e: # Error during FPDF rendering itself
+    except Exception as e: 
         print(f"Critical error during PDF rendering process: {e}")
         pdf, dejavu_loaded = create_error_pdf_instance()
         text_to_write = f"Critical Error During PDF File Creation\n\nDetails: {str(e)}\n\nThis error occurred after the AI successfully structured the data. Please check the PDF library and data."
@@ -272,7 +405,7 @@ def generate_pdf_node(state: QuotationGenerationState):
         pdf.multi_cell(0, 7, text_to_write)
         return {"pdf_output_bytes": bytes(pdf.output(dest='S'))}
 
-# Workflow definition (no changes)
+# Workflow definition
 workflow = StateGraph(QuotationGenerationState)
 workflow.add_node("fetch_enquiry_and_vendor_reply", fetch_data_node)
 workflow.add_node("parse_vendor_text", parse_vendor_reply_node)
@@ -312,7 +445,7 @@ def run_quotation_generation_graph(
     try:
         final_state = quotation_generation_graph_compiled.invoke(initial_state)
         pdf_bytes = final_state.get("pdf_output_bytes")
-        structured_data = final_state.get("structured_quotation_data", {}) # Should always have this key
+        structured_data = final_state.get("structured_quotation_data", {})
 
         if not pdf_bytes: 
              print("[Quotation Generation Graph] CRITICAL: PDF generation node returned no bytes.")
@@ -321,10 +454,10 @@ def run_quotation_generation_graph(
              if not dl: emsg = sanitize_for_standard_font(emsg)
              err_pdf_fallback.multi_cell(0, 10, emsg)
              pdf_bytes = bytes(err_pdf_fallback.output(dest='S'))
-             if not structured_data.get("error"): # Ensure error is flagged in data
+             if not structured_data.get("error"): 
                 structured_data = {"error": "System Error: PDF Generation process failed.", 
                                    "details": "No PDF bytes returned from graph's PDF node.", 
-                                   "type": "SystemError"}
+                                   "type": "SystemError", "raw_output": None, "status_code": None}
         
         print("[Quotation Generation Graph] Graph execution completed.")
         return pdf_bytes, structured_data
@@ -332,19 +465,22 @@ def run_quotation_generation_graph(
     except Exception as e: 
         print(f"[Quotation Generation Graph] CRITICAL error running compiled graph for {provider}: {e}")
         err_msg_graph = f"System error during quotation graph execution: {str(e)}"
-        raw_out = final_state.get("structured_quotation_data", {}).get("raw_output", "N/A")
-        if raw_out == "N/A": raw_out = final_state.get("parsed_vendor_info_text", "N/A")
+        raw_out_context = final_state.get("structured_quotation_data", {}).get("raw_output")
+        if not raw_out_context: raw_out_context = final_state.get("parsed_vendor_info_text", "N/A")
 
         err_pdf, dl = create_error_pdf_instance()
         title = "Quotation Generation Failed: System Error"
-        details = f"Error: {str(e)}\n\nContext (if available):\n{raw_out}"
-        if not dl: title = sanitize_for_standard_font(title); details = sanitize_for_standard_font(details)
+        details_text = f"Error: {str(e)}\n\nContext (if available):\n{raw_out_context}"
+        if not dl: 
+            title = sanitize_for_standard_font(title)
+            details_text = sanitize_for_standard_font(details_text)
         
         err_pdf.multi_cell(0, 8, title, align='C'); err_pdf.ln(5)
         if dl: err_pdf.set_font("DejaVu", "", 10)
         else: err_pdf.set_font("Helvetica", "", 10)
-        err_pdf.multi_cell(0, 5, details)
+        err_pdf.multi_cell(0, 5, details_text)
         
         return bytes(err_pdf.output(dest='S')), {
-            "error": err_msg_graph, "details": str(e), "raw_output": raw_out, "type": "GraphExecutionError"
+            "error": err_msg_graph, "details": str(e), "raw_output": raw_out_context, 
+            "type": "GraphExecutionError", "status_code": None
         }
