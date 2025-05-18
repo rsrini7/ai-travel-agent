@@ -1,4 +1,6 @@
 import streamlit as st
+import hashlib
+
 from src.utils.supabase_utils import (
     get_enquiry_by_id, get_client_by_enquiry_id,
     get_vendor_reply_by_enquiry_id,
@@ -21,8 +23,22 @@ from src.ui.components.tab3_actions import (
     handle_docx_generation
 )
 
-def _generate_graph_cache_key(enquiry_id: str, client_name: str, vendor_reply_text: str, ai_itinerary_text: str, llm_provider: str, llm_model: str | None) -> str:
-    key_string = f"{enquiry_id}-{client_name}-{vendor_reply_text}-{ai_itinerary_text}-{llm_provider}-{llm_model or 'N/A'}"
+def _generate_graph_cache_key(
+    enquiry_id: str, 
+    client_name: str, 
+    vendor_reply_text: str, 
+    ai_itinerary_text: str, 
+    llm_provider: str, 
+    llm_model: str | None,
+    temperature: float | None, # New
+    max_tokens: int | None # New
+) -> str:
+    key_string = (
+        f"{enquiry_id}-{client_name}-{vendor_reply_text}-{ai_itinerary_text}-"
+        f"{llm_provider}-{llm_model or 'N/A'}-"
+        f"temp:{temperature if temperature is not None else AIConfigState().temperature}-" # Use default from model if None for consistent key
+        f"maxtok:{max_tokens if max_tokens is not None else 'provider_default'}" 
+    )
     return hashlib.md5(key_string.encode('utf-8')).hexdigest()
 
 def _reset_tab3_specific_data_on_selection_change():
@@ -119,13 +135,16 @@ def render_tab3():
         render_vendor_reply_section(active_enquiry_id_tab3, handle_vendor_reply_submit)
         
         if st.session_state.app_state.tab3_state.enquiry_details and st.session_state.app_state.tab3_state.vendor_reply_info:
+            ai_conf_for_key = st.session_state.app_state.ai_config # Get current AI config
             current_graph_cache_key = _generate_graph_cache_key(
                 active_enquiry_id_tab3,
                 st.session_state.app_state.tab3_state.client_name,
                 st.session_state.app_state.tab3_state.vendor_reply_info.get('text', ""),
                 st.session_state.app_state.tab3_state.itinerary_info.get('text', "Itinerary suggestions not available."),
-                st.session_state.app_state.ai_config.selected_ai_provider,
-                st.session_state.app_state.ai_config.selected_model_for_provider
+                ai_conf_for_key.selected_ai_provider,
+                ai_conf_for_key.selected_model_for_provider,
+                ai_conf_for_key.temperature,   # Pass current temperature
+                ai_conf_for_key.max_tokens     # Pass current max_tokens
             )
 
             render_quotation_generation_section(

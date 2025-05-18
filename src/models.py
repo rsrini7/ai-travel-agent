@@ -1,9 +1,12 @@
+# src/models.py
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 class AIConfigState(BaseModel):
     selected_ai_provider: str = "OpenRouter"
     selected_model_for_provider: Optional[str] = None
+    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(default=None, ge=1) # None means use provider's default
 
 class Tab2State(BaseModel):
     selected_enquiry_id: Optional[Any] = None
