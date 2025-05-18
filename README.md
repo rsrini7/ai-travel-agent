@@ -53,6 +53,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 ```text
 .
 ├── app.py                          # Main Streamlit application
+├── sidebar.py                      # Global sidebar configuration and UI
 ├── llm_prompts.py                  # LLM prompt templates and configurations
 ├── llm_providers.py                # LLM provider integration (Gemini, OpenRouter)
 ├── pdf_utils.py                    # PDF generation logic using FPDF2
