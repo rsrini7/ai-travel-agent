@@ -245,6 +245,12 @@ Refer to `schema.sql` for detailed table definitions and relationships.
 
 ---
 
+## Notes
+
+python-docx a dependency of pdf2docx
+
+---
+
 ## 📄 License
 
 This project is licensed under the MIT License. (Note: A `LICENSE.md` file is not included in the provided project files, but MIT is a common choice for such projects.)
