@@ -53,10 +53,16 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 ```text
 .
 ├── app.py                          # Main Streamlit application
-├── llm_utils.py                    # LLM interaction, LangGraph workflows
-├── supabase_utils.py               # Supabase database and storage utilities
+├── llm_prompts.py                  # LLM prompt templates and configurations
+├── llm_providers.py                # LLM provider integration (Gemini, OpenRouter)
 ├── pdf_utils.py                    # PDF generation logic using FPDF2
 ├── docx_utils.py                   # PDF to DOCX conversion utility
+├── supabase_utils.py               # Supabase database and storage utilities
+├── itinerary_generator.py          # AI-powered itinerary generation logic
+├── quotation_graph_builder.py      # LangGraph workflow for quotation generation
+├── tab1_new_enquiry.py             # Streamlit tab for new travel enquiries
+├── tab2_manage_itinerary.py        # Streamlit tab for managing itineraries
+├── tab3_vendor_quotation.py        # Streamlit tab for vendor quotations
 ├── schema.sql                      # Supabase database schema (tables)
 ├── schema-drop.sql                 # Script to drop database tables (for dev/reset)
 ├── storage.sql                     # Supabase Storage bucket policies
