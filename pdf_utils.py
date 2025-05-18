@@ -2,6 +2,10 @@
 from typing import Dict, Any
 import os
 from fpdf import FPDF
+from constants import ( # Import constants
+    FONT_DEJAVU_REGULAR, FONT_DEJAVU_BOLD, FONT_DEJAVU_ITALIC,
+    IMAGE_TOP_BANNER, IMAGE_TRIPEXPLORE_LOGO_RATING
+)
 
 
 # --- PDF Generation Helper Class ---
@@ -12,10 +16,10 @@ class PDFQuotation(FPDF):
         self.set_left_margin(15)
         self.set_right_margin(15)
         
-        # Attempt to add DejaVu fonts
-        font_regular_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed.ttf')
-        font_bold_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed-Bold.ttf')
-        font_italic_path = os.path.join('assets', 'fonts', 'DejaVuSansCondensed-Oblique.ttf')
+        # Use constants for font paths
+        font_regular_path = FONT_DEJAVU_REGULAR
+        font_bold_path = FONT_DEJAVU_BOLD
+        font_italic_path = FONT_DEJAVU_ITALIC
 
         try:
             if os.path.exists(font_regular_path):
@@ -42,7 +46,6 @@ class PDFQuotation(FPDF):
             self.set_font('Helvetica', 'B', 10)
             self.set_font('Helvetica', 'I', 10)
 
-        # Determine available font family for later use
         self.font_family_available = {
             'regular': os.path.exists(font_regular_path),
             'bold': os.path.exists(font_bold_path),
@@ -72,11 +75,11 @@ class PDFQuotation(FPDF):
         self.ICON_PACKAGE = "📦" if self._font_supports("📦") else "[Pkg]"
         self.ICON_SPARKLES = "✨" if self._font_supports("✨") else "*"
 
-    def _font_supports(self, char): # char argument is not used by this simple check
-        return self.font_family_available['regular'] # True if DejaVu regular was loaded
+    def _font_supports(self, char):
+        return self.font_family_available['regular']
 
     def header_section_page1(self, data: Dict[str, Any]):
-        banner_path = os.path.join("assets", "top_banner.png")
+        banner_path = IMAGE_TOP_BANNER # Use constant
         if os.path.exists(banner_path):
             try:
                 self.image(banner_path, x=0, y=0, w=self.w) 
@@ -93,7 +96,7 @@ class PDFQuotation(FPDF):
         self.multi_cell(0, 5, f"{self.ICON_COLLABORATION} In collaboration with our trusted partners at TripExplore – crafting seamless travel experiences together.", align="C")
         self.ln(5)
 
-        logo_rating_path = os.path.join("assets", "tripexplore-logo-with-rating.png")
+        logo_rating_path = IMAGE_TRIPEXPLORE_LOGO_RATING # Use constant
         if os.path.exists(logo_rating_path):
             img_w = 150 
             img_h = 50 
@@ -201,12 +204,11 @@ class PDFQuotation(FPDF):
         self.multi_cell(0, 6, f"Total Cost for {pax} PAX: {total_cost} {data.get('currency', '')} /-", new_x="LMARGIN", new_y="NEXT")
         self.ln(2)
 
-        # --- First Highlighted Note: GST ---
         gst_note = data.get("gst_note", "GST is additional and subject to RBI Regulations.")
         self.set_fill_color(*self.highlight_bg_color)
         self.set_font("DejaVu", "B", 9)
         self.multi_cell(0, 5, f"● {gst_note}", fill=True, new_x="LMARGIN", new_y="NEXT")
-        self.set_font("DejaVu", "", 9) # Reset font to non-bold if subsequent text isn't bold
+        self.set_font("DejaVu", "", 9) 
         self.ln(5)
 
         self.set_text_color(*self.primary_color)
@@ -229,17 +231,16 @@ class PDFQuotation(FPDF):
         
         for item in exclusions: 
             self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
-        for item in standard_exclusions:
+        for item in standard_exclusions: 
             self.multi_cell(0, 5, f"{self.ICON_CROSS} {str(item)}", new_x="LMARGIN", new_y="NEXT")
         
         self.ln(2)
         
-        # --- Second Highlighted Note: TCS (MODIFIED) ---
         tcs_note_short = data.get("tcs_note_short", "TCS may be applicable as per government regulations.")
         self.set_fill_color(*self.highlight_bg_color)
         self.set_font("DejaVu", "B", 9)
         self.multi_cell(0, 5, f"● {tcs_note_short}", fill=True, new_x="LMARGIN", new_y="NEXT")
-        self.set_font("DejaVu", "", 9) # Reset font to non-bold if subsequent text isn't bold
+        self.set_font("DejaVu", "", 9) 
         self.ln(5)
 
     def final_notes_and_contact_section(self, data: Dict[str, Any]):
@@ -283,7 +284,7 @@ class PDFQuotation(FPDF):
         self.multi_cell(0, 4.5, data.get("tcs_rules_full", "TCS information not available."), new_x="LMARGIN", new_y="NEXT")
         self.ln(10)
 
-        logo_rating_path_footer = os.path.join("assets", "tripexplore-logo-with-rating.png")
+        logo_rating_path_footer = IMAGE_TRIPEXPLORE_LOGO_RATING # Use constant
         if os.path.exists(logo_rating_path_footer):
             img_w_footer = 70
             try:
