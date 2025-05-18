@@ -24,6 +24,8 @@ st.title("🤖 AI-Powered Travel Automation MVP")
 # Global AI Provider (initialize before sidebar render)
 if 'selected_ai_provider' not in st.session_state:
     st.session_state.selected_ai_provider = "OpenRouter" # Default
+if 'selected_model_for_provider' not in st.session_state: # Added from sidebar.py logic
+    st.session_state.selected_model_for_provider = None
 
 # Tab 1 & 2 shared states
 if 'selected_enquiry_id' not in st.session_state:
@@ -64,8 +66,14 @@ if 'tab3_quotation_docx_bytes' not in st.session_state:
 # Success/message flags
 if 'show_quotation_success_tab3' not in st.session_state:
     st.session_state.show_quotation_success_tab3 = False
-if 'vendor_reply_saved_success_message' not in st.session_state:
+if 'vendor_reply_saved_success_message' not in st.session_state: # Generic success message flag
     st.session_state.vendor_reply_saved_success_message = None
+
+# Tab 3 Caching for Quotation Graph Output
+if 'tab3_cached_graph_output' not in st.session_state:
+    st.session_state.tab3_cached_graph_output = None # Will store (pdf_bytes, structured_data_dict)
+if 'tab3_cache_key' not in st.session_state:
+    st.session_state.tab3_cache_key = None # Key used to generate the cached output
 
 
 # --- Render Sidebar ---

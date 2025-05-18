@@ -41,7 +41,7 @@ def render_tab1():
                             st.session_state.current_ai_suggestions = None
                             st.session_state.current_ai_suggestions_id = None
                             st.session_state.itinerary_loaded_for_tab2 = None # Reset tab2 specific flag
-                            
+
                             st.session_state.selected_enquiry_id_tab3 = enquiry_data['id'] # Auto-select in Tab 3
                             st.session_state.tab3_enquiry_details = None # Force reload in Tab 3
                             st.session_state.tab3_client_name = client_name_input
@@ -54,6 +54,10 @@ def render_tab1():
                             st.session_state.tab3_current_docx_storage_path = None
                             st.session_state.show_quotation_success_tab3 = False
                             st.session_state.vendor_reply_saved_success_message = None # Clear any old messages
+
+                            # Reset Tab 3 quotation graph cache
+                            st.session_state.tab3_cached_graph_output = None
+                            st.session_state.tab3_cache_key = None
                         else:
                             st.error(f"Enquiry submitted (ID: {enquiry_data['id']}) but failed to save client information. {client_error if client_error else 'Unknown error'}")
                     else:
