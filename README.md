@@ -52,32 +52,33 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 
 ```text
 .
-├── app.py                          # Main Streamlit application
-├── sidebar.py                      # Global sidebar configuration and UI
+├── app.py                          # Main Streamlit application entry point
+├── sidebar.py                      # Global sidebar configuration and AI provider selection
 ├── llm_prompts.py                  # LLM prompt templates and configurations
-├── llm_providers.py                # LLM provider integration (Gemini, OpenRouter)
+├── llm_providers.py                # LLM provider integration (Gemini, OpenRouter, Groq)
+├── itinerary_generator.py          # AI-powered itinerary generation logic
+├── quotation_graph_builder.py      # LangGraph workflow for quotation generation
 ├── pdf_utils.py                    # PDF generation logic using FPDF2
 ├── docx_utils.py                   # PDF to DOCX conversion utility
 ├── supabase_utils.py               # Supabase database and storage utilities
-├── itinerary_generator.py          # AI-powered itinerary generation logic
-├── quotation_graph_builder.py      # LangGraph workflow for quotation generation
-├── tab1_new_enquiry.py             # Streamlit tab for new travel enquiries
-├── tab2_manage_itinerary.py        # Streamlit tab for managing itineraries
-├── tab3_vendor_quotation.py        # Streamlit tab for vendor quotations
-├── schema.sql                      # Supabase database schema (tables)
-├── schema-drop.sql                 # Script to drop database tables (for dev/reset)
+├── tab1_new_enquiry.py             # New travel enquiries tab
+├── tab2_manage_itinerary.py        # Itinerary management tab
+├── tab3_vendor_quotation.py        # Vendor quotation tab implementation
+├── tab3_ui_components.py           # UI components for tab3
+├── tab3_actions.py                 # Action handlers for tab3
+├── schema.sql                      # Database schema (tables)
+├── schema-drop.sql                 # Script to drop database tables
 ├── storage.sql                     # Supabase Storage bucket policies
-├── requirements.txt                # Python dependencies
-├── .python-version                 # Specifies Python version (3.11)
-├── .env.example                    # Environment variable template
-├── assets/                         # Static assets for PDF generation
-│   ├── fonts/
+├── assets/                         # Static assets
+│   ├── fonts/                      # Custom fonts for PDF generation
 │   │   ├── DejaVuSansCondensed.ttf
 │   │   ├── DejaVuSansCondensed-Bold.ttf
 │   │   └── DejaVuSansCondensed-Oblique.ttf
-│   ├── top_banner.png              # (User needs to provide)
-│   └── tripexplore-logo-with-rating.png # (User needs to provide)
-└── README.md                       # This file
+│   ├── top_banner.png              # Banner image for PDF header
+│   └── tripexplore-logo-with-rating.png  # Logo for PDF header
+├── .env.example                    # Environment variable template
+├── requirements.txt                # Python dependencies
+└── README.md                       # Project documentation
 ```
 
 ---
