@@ -14,7 +14,10 @@ from src.ui.tabs.tab3_vendor_quotation import render_tab3
 # Import sidebar rendering function
 from src.ui.sidebar import render_sidebar
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    layout="wide",
+    page_title="AI Travel Agent"
+)
 st.title("🤖 AI-Powered Travel Agent Automation")
 
 # --- Initialize session state ---
