@@ -92,5 +92,25 @@ def get_llm_instance(provider: str):
             model_name=model_name,
             **llm_params # Spread temperature, max_tokens
         )
+
+    elif provider == "TogetherAI":
+        api_key = os.getenv("TOGETHERAI_API_KEY")
+        model_name = selected_model
+        if not model_name:
+            model_name = os.getenv("TOGETHERAI_DEFAULT_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
+        if not api_key:
+            raise ValueError("TOGETHERAI_API_KEY not found for TogetherAI. Check .env file.")
+
+        # ChatOpenAI (used by TogetherAI) typically uses 'max_tokens'
+        if max_tokens_from_state is not None:
+            llm_params['max_tokens'] = max_tokens_from_state
+        
+        print(f"LLM_PROVIDERS.PY: Initializing TogetherAI with model: {model_name}, Params: {llm_params}")
+        return ChatOpenAI(
+            model=model_name,
+            openai_api_key=api_key,
+            base_url="https://api.together.xyz/v1",
+            **llm_params # Spread temperature, max_tokens
+        )
     else:
-        raise ValueError(f"Unsupported AI provider: {provider}. Supported: 'Gemini', 'OpenRouter', 'Groq'.")
+        raise ValueError(f"Unsupported AI provider: {provider}. Supported: 'Gemini', 'OpenRouter', 'Groq', 'TogetherAI'.")

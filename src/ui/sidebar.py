@@ -22,6 +22,11 @@ PROVIDER_MODEL_OPTIONS = {
         "gemini-1.5-flash-latest",
         "gemini-1.5-pro-latest",
         "gemini-1.0-pro"
+    ],
+    "TogetherAI": [
+        "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+        "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
+        # Add other TogetherAI models here if needed
     ]
 }
 
@@ -31,7 +36,7 @@ def render_sidebar():
     Manages AI provider, model, and advanced settings in st.session_state.app_state.ai_config.
     """
     st.sidebar.subheader("⚙️ AI Configuration")
-    ai_provider_options = ["Gemini", "OpenRouter", "Groq"]
+    ai_provider_options = ["Gemini", "OpenRouter", "Groq", "TogetherAI"] # Added TogetherAI
     ai_conf = st.session_state.app_state.ai_config # Shorthand for session state config
 
     # --- Provider Selection ---
@@ -75,6 +80,7 @@ def render_sidebar():
         if active_provider == "OpenRouter": default_model_env_var = os.getenv("OPENROUTER_DEFAULT_MODEL")
         elif active_provider == "Groq": default_model_env_var = os.getenv("GROQ_DEFAULT_MODEL")
         elif active_provider == "Gemini": default_model_env_var = os.getenv("GOOGLE_DEFAULT_MODEL")
+        elif active_provider == "TogetherAI": default_model_env_var = os.getenv("TOGETHERAI_DEFAULT_MODEL")
 
         current_model_index = 0
         if ai_conf.selected_model_for_provider and ai_conf.selected_model_for_provider in available_models:
