@@ -15,7 +15,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
   - Submit new travel enquiries with details like destination, duration, number of travelers, trip type, and client information.
 - **AI Itinerary Suggestions:**
   - Generate AI-powered suggestions for places and attractions based on enquiry details.
-  - Selectable AI providers (Google Gemini, OpenRouter, Groq).
+  - Selectable AI providers (Google Gemini, OpenRouter, Groq, Together.AI).
 - **Vendor Reply Integration:**
   - Input and store vendor replies, including pricing, inclusions, and exclusions.
 - **AI Quotation Generation:**
@@ -27,8 +27,8 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 - **Data Persistence:**
   - All enquiries, client details, itineraries, vendor replies, and quotation metadata are stored in a Supabase PostgreSQL database.
 - **Configurable AI:**
-  - Choose between different AI providers (Gemini, OpenRouter, Groq) for content generation tasks.
-  - Specify default models for OpenRouter and Groq via environment variables.
+  - Choose between different AI providers (Gemini, OpenRouter, Groq, Together.AI) for content generation tasks.
+  - Specify default models for OpenRouter, Groq, and Together.AI via environment variables.
 
 ---
 
@@ -39,7 +39,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
 - **AI/LLM Integration:**
   - Langchain
   - LangGraph (for orchestrating quotation generation steps)
-  - LLM Providers: Google Gemini, OpenRouter, Groq
+  - LLM Providers: Google Gemini, OpenRouter, Groq, Together.AI
 - **Document Generation:**
   - FPDF2 (`fpdf`) for PDF creation
   - `pdf2docx` for PDF to DOCX conversion
@@ -119,6 +119,7 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
   - Google API Key (if using Gemini)
   - OpenRouter API Key (if using OpenRouter)
   - Groq API Key (if using Groq)
+  - Together.AI API Key (if using Together.AI)
 
 ### Steps
 
@@ -155,6 +156,8 @@ This project is a **AI Travel Agent** demonstrating an AI-powered travel automat
      OPENROUTER_APP_TITLE="AI Travel Quotation" # Optional, set your app's title
      GROQ_API_KEY="YOUR_GROQ_API_KEY"
      GROQ_DEFAULT_MODEL="llama3-8b-8192" # Optional, specify default Groq model
+     TOGETHERAI_API_KEY="YOUR_TOGETHERAI_API_KEY"
+     TOGETHERAI_DEFAULT_MODEL="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" # Optional, supported: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
      ```
 5. **Supabase Setup:**
    - Go to your Supabase project dashboard.
@@ -226,8 +229,8 @@ The application is organized into three main tabs:
 
 ### Global AI Configuration (Sidebar)
 
-- Use the sidebar to select the AI Provider (Gemini or OpenRouter) that will be used for all LLM tasks (itinerary suggestions, quotation structuring).
-- The currently active provider and model (for OpenRouter) are displayed.
+- Use the sidebar to select the AI Provider (Gemini, OpenRouter, Groq, or Together.AI) that will be used for all LLM tasks (itinerary suggestions, quotation structuring).
+- The currently active provider and model (for OpenRouter, Groq, Together.AI) are displayed.
 
 ---
 
@@ -244,6 +247,8 @@ The application requires the following environment variables to be set in the `.
 - `OPENROUTER_DEFAULT_MODEL`: (Optional) The default model to use with OpenRouter (e.g., `google/gemini-flash-1.5`, `openai/gpt-3.5-turbo`). Defaults to `google/gemini-flash-1.5` if not set.
 - `OPENROUTER_HTTP_REFERER`: (Optional) Your site URL or app name, sent as `HTTP-Referer` to OpenRouter. Defaults to `http://localhost:3000`.
 - `OPENROUTER_APP_TITLE`: (Optional) Your app's title, sent as `X-Title` to OpenRouter. Defaults to `AI Travel Quotation`.
+- `TOGETHERAI_API_KEY`: Your API key for Together.AI.
+- `TOGETHERAI_DEFAULT_MODEL`: (Optional) Default model to use with Together.AI. Supported models include `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` (default) and `deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free`.
 
 ---
 
