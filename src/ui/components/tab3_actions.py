@@ -183,13 +183,15 @@ def _get_or_generate_quotation_graph_data(current_graph_cache_key: str) -> tuple
     current_enquiry_details_for_gen = st.session_state.app_state.tab3_state.enquiry_details.copy()
     current_enquiry_details_for_gen["client_name_actual"] = st.session_state.app_state.tab3_state.client_name
     provider_for_generation = st.session_state.app_state.ai_config.selected_ai_provider
+    ai_conf_for_generation = st.session_state.app_state.ai_config # Added
     
     with st.spinner(f"Generating quotation data with {provider_for_generation}..."):
         pdf_bytes_output, structured_data_dict = run_quotation_generation_graph(
             current_enquiry_details_for_gen,
             st.session_state.app_state.tab3_state.vendor_reply_info['text'],
             itinerary_text_for_graph,
-            provider_for_generation
+            provider_for_generation,
+            ai_conf_for_generation # Added
         )
     
     if pdf_bytes_output:

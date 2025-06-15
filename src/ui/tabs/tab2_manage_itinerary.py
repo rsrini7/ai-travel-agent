@@ -65,9 +65,11 @@ def render_tab2():
 
             if st.button(f"Generate Places Suggestions with {st.session_state.app_state.ai_config.selected_ai_provider}", key="gen_ai_suggestions_btn_tab2"):
                 with st.spinner(f"Generating AI suggestions with {st.session_state.app_state.ai_config.selected_ai_provider}..."):
+                    ai_conf_for_generation = st.session_state.app_state.ai_config # Added
                     suggestions_text, error_info = generate_places_suggestion_llm(
                         enquiry_details_tab2,
-                        provider=st.session_state.app_state.ai_config.selected_ai_provider
+                        provider=st.session_state.app_state.ai_config.selected_ai_provider,
+                        ai_conf=ai_conf_for_generation # Added
                     )
                     if suggestions_text and not error_info:
                         new_suggestion_record, error_msg_sugg_add = add_itinerary(active_enquiry_id_tab2, suggestions_text)

@@ -281,6 +281,12 @@ Refer to `schema.sql` for detailed table definitions and relationships.
 
 python-docx a dependency of pdf2docx
 
+## Troubleshooting
+
+Unexpected error fetching enquiries: Unexpected error - Type: <class 'httpx.ConnectError'>, Error: [Errno 8] nodename nor servname provided, or not known
+
+if the above error occurs when clicking on tab2 or tab3 then the suppabase may be has to be restored.
+
 ---
 
 ## 📄 License

@@ -33,7 +33,7 @@ class TestTogetherAIProvider(unittest.TestCase):
         """Test TogetherAI initialization with default model."""
         mock_st.session_state.app_state = self.mock_app_session_state
         
-        llm_instance = get_llm_instance(provider="TogetherAI")
+        llm_instance = get_llm_instance(provider="TogetherAI", ai_conf=self.mock_ai_config)
 
         mock_chat_openai_class.assert_called_once()
         args, kwargs = mock_chat_openai_class.call_args
@@ -52,7 +52,7 @@ class TestTogetherAIProvider(unittest.TestCase):
         # Re-create AppSessionState with updated ai_config
         mock_st.session_state.app_state = AppSessionState(ai_config=self.mock_ai_config)
 
-        llm_instance = get_llm_instance(provider="TogetherAI")
+        llm_instance = get_llm_instance(provider="TogetherAI", ai_conf=self.mock_ai_config)
 
         mock_chat_openai_class.assert_called_once()
         args, kwargs = mock_chat_openai_class.call_args
@@ -72,7 +72,7 @@ class TestTogetherAIProvider(unittest.TestCase):
         # Re-create AppSessionState with updated ai_config
         mock_st.session_state.app_state = AppSessionState(ai_config=self.mock_ai_config)
         
-        llm_instance = get_llm_instance(provider="TogetherAI")
+        llm_instance = get_llm_instance(provider="TogetherAI", ai_conf=self.mock_ai_config)
 
         mock_chat_openai_class.assert_called_once()
         args, kwargs = mock_chat_openai_class.call_args
@@ -87,7 +87,7 @@ class TestTogetherAIProvider(unittest.TestCase):
         mock_st.session_state.app_state = self.mock_app_session_state
         
         with self.assertRaises(ValueError) as context:
-            get_llm_instance(provider="TogetherAI")
+            get_llm_instance(provider="TogetherAI", ai_conf=self.mock_ai_config)
         self.assertIn("TOGETHERAI_API_KEY not found", str(context.exception))
 
 if __name__ == '__main__':

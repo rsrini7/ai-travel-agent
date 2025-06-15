@@ -1,16 +1,14 @@
 # src/llm/llm_providers.py:
 import os
-import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 
-def get_llm_instance(provider: str):
+def get_llm_instance(provider: str, ai_conf): # Added ai_conf parameter
     """
     Returns an LLM instance based on the specified provider, selected model,
     and advanced settings from session state.
     """
-    ai_conf = st.session_state.app_state.ai_config # Get the AIConfigState model
     selected_model = ai_conf.selected_model_for_provider
     temperature = ai_conf.temperature
     max_tokens_from_state = ai_conf.max_tokens

@@ -2,7 +2,7 @@
 import os
 import json
 import re 
-import streamlit as st # Added for accessing session state
+# import streamlit as st # Removed
 from typing import TypedDict, Dict, Any
 
 from langgraph.graph import StateGraph, END
@@ -70,6 +70,7 @@ class QuotationGenerationState(TypedDict):
     structured_quotation_data: Dict[str, Any] 
     pdf_output_bytes: bytes
     ai_provider: str
+    ai_conf: Any # Added
 
 def fetch_data_node(state: QuotationGenerationState):
     return {
@@ -77,6 +78,7 @@ def fetch_data_node(state: QuotationGenerationState):
         "vendor_reply_text": state["vendor_reply_text"],
         "ai_suggested_itinerary_text": state["ai_suggested_itinerary_text"],
         "ai_provider": state["ai_provider"],
+        "ai_conf": state["ai_conf"], # Added
         "parsed_vendor_info_error": None, # Initialize error state for this stage
         "structured_quotation_data": {} # Initialize for this stage
     }
@@ -85,11 +87,13 @@ def parse_vendor_reply_node(state: QuotationGenerationState):
     vendor_reply = state["vendor_reply_text"]
     enquiry_details = state["enquiry_details"]
     provider = state["ai_provider"]
+    ai_conf = state["ai_conf"] # Modified to use state
     error_payload = None # This will hold the final error dict for the state
     parsed_info_str = ""
 
     try:
-        llm = get_llm_instance(provider)
+        # ai_conf = st.session_state.app_state.ai_config # Removed
+        llm = get_llm_instance(provider, ai_conf) # Uses ai_conf from state
         prompt = ChatPromptTemplate.from_template(VENDOR_REPLY_PARSING_PROMPT_TEMPLATE_STRING)
         parser = StrOutputParser() 
         chain = prompt | llm | parser
@@ -218,15 +222,17 @@ def structure_data_for_pdf_node(state: QuotationGenerationState):
     raw_llm_output_for_error = ""
     
     try:
-        llm = get_llm_instance(provider)
+        # ai_conf = st.session_state.app_state.ai_config # Removed
+        ai_conf = state["ai_conf"] # Modified to use state
+        llm = get_llm_instance(provider, ai_conf) # Uses ai_conf from state
         num_days_int = int(enquiry.get("num_days", 0))
         num_nights = num_days_int - 1 if num_days_int > 0 else 0
         json_prompt_str = QUOTATION_STRUCTURE_JSON_PROMPT_TEMPLATE_STRING
-        current_model_name = st.session_state.app_state.ai_config.selected_model_for_provider or ""
+        current_model_name = ai_conf.selected_model_for_provider or "" # Modified to use ai_conf from state
 
         if provider == "OpenRouter" and ("gpt" in current_model_name.lower() or \
                                          "claude-3" in current_model_name.lower()):
-            llm_for_json = get_llm_instance(provider) 
+            llm_for_json = get_llm_instance(provider, ai_conf) # Uses ai_conf from state
             if not hasattr(llm_for_json, 'model_kwargs') or llm_for_json.model_kwargs is None:
                 llm_for_json.model_kwargs = {}
             llm_for_json.model_kwargs["response_format"] = {"type": "json_object"}
@@ -424,7 +430,8 @@ def run_quotation_generation_graph(
     enquiry_details: dict,
     vendor_reply_text: str,
     ai_suggested_itinerary_text: str,
-    provider: str
+    provider: str,
+    ai_conf: Any # Added
 ) -> tuple[bytes | None, Dict[str, Any] | None]:
     initial_state = QuotationGenerationState(
         enquiry_details=enquiry_details,
@@ -434,7 +441,8 @@ def run_quotation_generation_graph(
         parsed_vendor_info_error=None,
         structured_quotation_data={},
         pdf_output_bytes=b"",
-        ai_provider=provider
+        ai_provider=provider,
+        ai_conf=ai_conf # Added
     )
 
     print(f"[Quotation Generation Graph] Starting quotation data generation with {provider}...")

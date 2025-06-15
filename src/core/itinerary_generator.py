@@ -25,7 +25,7 @@ def _extract_error_message_from_payload(payload: Any) -> str | None:
     return None
 
 
-def generate_places_suggestion_llm(enquiry_details: dict, provider: str) -> tuple[str | None, dict | None]:
+def generate_places_suggestion_llm(enquiry_details: dict, provider: str, ai_conf: Any) -> tuple[str | None, dict | None]: # Added ai_conf
     """
     Generates a list of suggested places/attractions using Langchain.
     Returns a tuple: (suggestion_text, error_info_dict).
@@ -33,7 +33,7 @@ def generate_places_suggestion_llm(enquiry_details: dict, provider: str) -> tupl
     error_info_dict contains 'message' and optionally 'details', 'status_code', 'raw_response', 'type' if an error occurred.
     """
     try:
-        llm = get_llm_instance(provider)
+        llm = get_llm_instance(provider, ai_conf) # Passed ai_conf
         prompt_template = ChatPromptTemplate.from_template(PLACES_SUGGESTION_PROMPT_TEMPLATE_STRING)
         output_parser = StrOutputParser()
         chain = prompt_template | llm | output_parser
